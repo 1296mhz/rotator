@@ -12,8 +12,9 @@
 #define BUTTON_PIN 1   // the number of the pushbutton encoder pin
 //#define LED_PIN 13     // select the pin for the LED
 #define PIN_A 2    
-#define PIN_B 3  
+#define PIN_B 3
 #define PIN_LEFT 11
+#define PIN_ACTION 12
 #define PIN_RIGHT 13
 
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
@@ -33,7 +34,7 @@ String s_pr;
 int angle;
 
 void setup() {
-lcd.begin(NUMCOLS, NUMROWS);
+  lcd.begin(NUMCOLS, NUMROWS);
 
   pinMode(6, OUTPUT);
   pinMode(PIN_A, INPUT_PULLUP);
@@ -119,19 +120,23 @@ lcd.setCursor(13,1);
 lcd.print(s_pr);
 
  if  (set - angle > (hold?HYSTERESIS_HOLD:HYSTERESIS))
-      {
+ {
   digitalWrite(PIN_RIGHT,LOW);
+  digitalWrite(PIN_ACTION, LOW);
   lcd.setCursor(9,0);
   lcd.print("-->");
   digitalWrite(PIN_LEFT, HIGH);
-}
+  digitalWrite(PIN_ACTION, HIGH);
+ }
 
-   if (angle - set > (hold?HYSTERESIS_HOLD:HYSTERESIS))
+  if (angle - set > (hold?HYSTERESIS_HOLD:HYSTERESIS))
   {
   digitalWrite(PIN_LEFT, LOW);
+  digitalWrite(PIN_ACTION, LOW);
   lcd.setCursor(9,0);
   lcd.print("<--");
-  digitalWrite(PIN_RIGHT,HIGH);
+  digitalWrite(PIN_RIGHT, HIGH);
+  digitalWrite(PIN_ACTION, HIGH);
   }
 
 //  if (set == angle){
