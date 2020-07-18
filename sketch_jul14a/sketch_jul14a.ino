@@ -86,7 +86,6 @@ void loop() {
     lcd.print("Calibration");
 
     uint32_t ms = millis();
- 
     buttonState = digitalRead(BUTTON_PIN);
     // Фиксируем нажатие кнопки   
     if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
@@ -95,7 +94,7 @@ void loop() {
        ms_button = ms;
        lcd.setCursor(15, 0);
        lcd.print("*");
-      lcd.clear();
+       lcd.clear();
        subMenu = 1;
     }
 
@@ -145,9 +144,7 @@ void loop() {
     s_angle = "  " + String(angle);
   }
 
-
   uint32_t ms = millis();
- 
   buttonState = digitalRead(BUTTON_PIN);
  // Фиксируем нажатие кнопки   
   if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
