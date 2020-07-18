@@ -82,9 +82,33 @@ void loop() {
   angle = int(round(sensorValue /2.8));
   // encoder
   if(subMenu == 2) {
+    lcd.setCursor(0, 0);
+    lcd.print("Calibration");
+
+    uint32_t ms = millis();
  
-  lcd.setCursor(0, 0);
-  lcd.print("Calibration");
+    buttonState = digitalRead(BUTTON_PIN);
+    // Фиксируем нажатие кнопки   
+    if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
+       buttonEncoder = true;
+       buttonEncoderLong = false;
+       ms_button = ms;
+       lcd.setCursor(15, 0);
+       lcd.print("*");
+      lcd.clear();
+       subMenu = 1;
+    }
+
+    // Фиксируем отпускание кнопки   
+  if (buttonState == HIGH && buttonEncoder && ( ms - ms_button ) > 50) {
+    // turn LED off:
+    target = preset;
+    hold = false;
+    buttonEncoder = false;
+    ms_button = ms;
+
+  }
+
   }
   if(subMenu == 1) {
      currentTime = millis();
@@ -127,13 +151,11 @@ void loop() {
   buttonState = digitalRead(BUTTON_PIN);
  // Фиксируем нажатие кнопки   
   if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
-
     buttonEncoder = true;
     buttonEncoderLong = false;
     ms_button = ms;
     lcd.setCursor(15, 0);
     lcd.print("*");
-
   }
 // Фиксируем длинное нажатие кнопки   
   if (buttonState == LOW && !buttonEncoderLong && ( ms - ms_button ) > 2000) {
@@ -146,13 +168,13 @@ void loop() {
   // Фиксируем отпускание кнопки   
   if (buttonState == HIGH && buttonEncoder && ( ms - ms_button ) > 50) {
     // turn LED off:
-        target = preset;
+    target = preset;
     hold = false;
     buttonEncoder = false;
     ms_button = ms;
-   // lcd.setCursor(15, 0);
-   // lcd.print(" ");
-       if (target >= 100){ s_target=String(target);}
+    lcd.setCursor(15, 0);
+    lcd.print(" ");
+    if (target >= 100){ s_target=String(target);}
     if (target < 100) {s_target=" "+String(target);}
     if (target < 10) {s_target="  "+String(target);}
   }
