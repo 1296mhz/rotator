@@ -80,7 +80,8 @@ void loop() {
   //angle=sensorValue/2.8;
   //angle=sensorValue/1024.0 * 360;
   angle = int(round(sensorValue /2.8));
-  // encoder
+  
+  // Calibration
   if(subMenu == 2) {
     lcd.setCursor(0, 0);
     lcd.print("Calibration");
@@ -94,6 +95,8 @@ void loop() {
        ms_button = ms;
        lcd.setCursor(15, 0);
        lcd.print("*");
+       delay(1000);
+       lcd.begin(NUMCOLS, NUMROWS);
        lcd.clear();
        subMenu = 1;
     }
@@ -101,14 +104,13 @@ void loop() {
     // Фиксируем отпускание кнопки   
   if (buttonState == HIGH && buttonEncoder && ( ms - ms_button ) > 50) {
     // turn LED off:
-    target = preset;
-    hold = false;
+
     buttonEncoder = false;
     ms_button = ms;
-
   }
 
-  }
+}
+  // Основной цикл
   if(subMenu == 1) {
      currentTime = millis();
   if (currentTime >= (loopTime + 5)) {
@@ -156,8 +158,9 @@ void loop() {
   }
 // Фиксируем длинное нажатие кнопки   
   if (buttonState == LOW && !buttonEncoderLong && ( ms - ms_button ) > 2000) {
-    subMenu = 2;
+      lcd.begin(NUMCOLS, NUMROWS);
     lcd.clear();
+    subMenu = 2;
     buttonEncoderLong = true;
     ms_button = ms;
   }
