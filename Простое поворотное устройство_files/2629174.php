@@ -1,1 +1,0 @@
-_HST_cntval="#6Pages=739633#4Visits=430788#5Pag. today=222#3Vis. today=151#7Online=1";chfh2(_HST_cntval);
