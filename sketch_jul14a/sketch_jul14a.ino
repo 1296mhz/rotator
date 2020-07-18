@@ -6,7 +6,7 @@
 */
 #define HYSTERESIS 1
 #define HYSTERESIS_HOLD 5
-#define STEP 10
+#define STEP 1
 #define NUMROWS 2
 #define NUMCOLS 16
 #define SENSOR_PIN A1 // select the input pin for the antenna potentiometer
@@ -20,9 +20,14 @@
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 int target = 0;
 int calibration = 0;
-int buttonState = 0;         // variable for reading the pushbutton status
+int correctDelta = 0;
+bool buttonState;         // variable for reading the pushbutton status
+bool buttonEncoder = false;
+bool buttonEncoderLong = false;
+uint32_t ms_button = 0;
 bool hold;
-
+// 1 - Main, 2 - Calibration
+int subMenu;
 float sensorValue = 0;  // variable to store the value coming from the sensor
 int preset = 180 ; // preset encoder;
 //iz fla encoder
@@ -38,6 +43,7 @@ void setup() {
   // Serial.begin(9600);
   // Serial.println("R8CDF!");
   // Serial.println(VERSION);
+  subMenu = 1;
   lcd.begin(NUMCOLS, NUMROWS);
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -68,13 +74,20 @@ void setup() {
 
 
 void loop() {
+  
   // read the value from the sensor:
   sensorValue = analogRead(SENSOR_PIN);
   //angle=sensorValue/2.8;
   //angle=sensorValue/1024.0 * 360;
   angle = int(round(sensorValue /2.8));
   // encoder
-  currentTime = millis();
+  if(subMenu == 2) {
+ 
+  lcd.setCursor(0, 0);
+  lcd.print("Calibration");
+  }
+  if(subMenu == 1) {
+     currentTime = millis();
   if (currentTime >= (loopTime + 5)) {
     encoder_A = digitalRead(PIN_A);
     if ((!encoder_A) && (encoder_A_prev)) {
@@ -108,20 +121,38 @@ void loop() {
     s_angle = "  " + String(angle);
   }
 
-  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+
+  uint32_t ms = millis();
+ 
   buttonState = digitalRead(BUTTON_PIN);
-  if (buttonState == HIGH) {
-    // turn LED off:
-    lcd.setCursor(15, 0);
-    lcd.print(" ");
-  }
-  else {
-    // turn LED on:
-    target = preset;
-    hold = false;
+ // Фиксируем нажатие кнопки   
+  if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
+
+    buttonEncoder = true;
+    buttonEncoderLong = false;
+    ms_button = ms;
     lcd.setCursor(15, 0);
     lcd.print("*");
-    if (target >= 100){ s_target=String(target);}
+
+  }
+// Фиксируем длинное нажатие кнопки   
+  if (buttonState == LOW && !buttonEncoderLong && ( ms - ms_button ) > 2000) {
+    subMenu = 2;
+    lcd.clear();
+    buttonEncoderLong = true;
+    ms_button = ms;
+  }
+
+  // Фиксируем отпускание кнопки   
+  if (buttonState == HIGH && buttonEncoder && ( ms - ms_button ) > 50) {
+    // turn LED off:
+        target = preset;
+    hold = false;
+    buttonEncoder = false;
+    ms_button = ms;
+   // lcd.setCursor(15, 0);
+   // lcd.print(" ");
+       if (target >= 100){ s_target=String(target);}
     if (target < 100) {s_target=" "+String(target);}
     if (target < 10) {s_target="  "+String(target);}
   }
@@ -175,4 +206,6 @@ void loop() {
     lcd.setCursor(9, 0);
     lcd.print("   ");
   }
+  }
+ 
 }
