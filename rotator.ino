@@ -16,7 +16,13 @@
 #define PIN_B 3
 #define PIN_LEFT 11
 #define PIN_RIGHT 13
-#define VERSION "v19.7.20 - 01:13"
+#define BTN_UP   1
+#define BTN_DOWN 2
+#define BTN_LEFT 3
+#define BTN_RIGHT 4
+#define BTN_SELECT 5
+#define BTN_NONE 10
+#define VERSION "v19.7.20 - 10:27"
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 int target = 0;
 int calibration = 0;
@@ -39,6 +45,55 @@ String s_target;
 String s_pr;
 int angle;
 
+void clearLine(int line){
+  lcd.setCursor(0, line);
+  lcd.print("                ");
+}
+
+void printDisplay(String message){
+  Serial.println(message);
+  lcd.setCursor(0, 1);
+  lcd.print(message);
+  delay(1000);
+  clearLine(1);
+}
+void cw() {
+  digitalWrite(PIN_RIGHT, LOW);
+  lcd.setCursor(9, 0);
+  lcd.print("-->"); 
+  digitalWrite(PIN_LEFT, HIGH);
+}
+
+void ccw() {
+  digitalWrite(PIN_LEFT, LOW);
+  lcd.setCursor(9, 0);
+  lcd.print("<--"); 
+  digitalWrite(PIN_RIGHT, HIGH);
+}
+
+int detectButton() {
+  int keyAnalog = analogRead(A0);
+  if (keyAnalog < 100) {
+    // Значение меньше 100 – нажата кнопка right
+    return BTN_RIGHT;
+  } else if (keyAnalog < 200) {
+    // Значение больше 100 (иначе мы бы вошли в предыдущий блок результата сравнения, но меньше 200 – нажата кнопка UP
+    return BTN_UP;
+  } else if (keyAnalog < 400) {
+    // Значение больше 200, но меньше 400 – нажата кнопка DOWN
+    return BTN_DOWN;
+  } else if (keyAnalog < 600) {
+    // Значение больше 400, но меньше 600 – нажата кнопка LEFT
+    return BTN_LEFT;
+  } else if (keyAnalog < 800) {
+    // Значение больше 600, но меньше 800 – нажата кнопка SELECT
+    return BTN_SELECT;
+  } else {
+    // Все остальные значения (до 1023) будут означать, что нажатий не было
+    return BTN_NONE;
+  }
+}
+
 void setup() {
   // Serial.begin(9600);
   // Serial.println("R8CDF!");
@@ -51,7 +106,8 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print(VERSION);
   delay(2000);
-  lcd.clear();
+  clearLine(0);
+  clearLine(1);
   // pinMode(6, OUTPUT);
   pinMode(PIN_A, INPUT_PULLUP);
   pinMode(PIN_B, INPUT_PULLUP);
@@ -81,12 +137,42 @@ void loop() {
   //angle=sensorValue/1024.0 * 360;
   angle = int(round(sensorValue /2.8));
   
+  int button = detectButton();
+  switch (button) {
+    case BTN_UP:
+      printDisplay("UP");
+      break;
+    case BTN_DOWN:
+      printDisplay("DOWN");
+      break;
+    case BTN_LEFT:
+    if(target >= 1) {
+      ccw();
+      target = angle;
+    }
+      break;
+    case BTN_RIGHT:
+    if(target <= 359) {
+      cw();
+      target = angle;
+    }
+      break;
+    case BTN_SELECT:
+      printDisplay("SELECT");
+      break;
+    default:
+      //printDisplay("Press any key");
+      break;
+  }
+
   // Calibration
   if(subMenu == 2) {
     lcd.setCursor(0, 0);
     lcd.print("Calibration");
-
+    lcd.setCursor(0, 1);
+     lcd.print("                ");
     uint32_t ms = millis();
+
     buttonState = digitalRead(BUTTON_PIN);
     // Фиксируем нажатие кнопки   
     if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
@@ -96,19 +182,17 @@ void loop() {
        lcd.setCursor(15, 0);
        lcd.print("*");
        delay(1000);
-       lcd.begin(NUMCOLS, NUMROWS);
-       lcd.clear();
+       clearLine(0);
+       clearLine(1);
        subMenu = 1;
     }
 
     // Фиксируем отпускание кнопки   
   if (buttonState == HIGH && buttonEncoder && ( ms - ms_button ) > 50) {
     // turn LED off:
-
     buttonEncoder = false;
     ms_button = ms;
   }
-
 }
   // Основной цикл
   if(subMenu == 1) {
@@ -158,8 +242,9 @@ void loop() {
   }
 // Фиксируем длинное нажатие кнопки   
   if (buttonState == LOW && !buttonEncoderLong && ( ms - ms_button ) > 2000) {
-      lcd.begin(NUMCOLS, NUMROWS);
-    lcd.clear();
+    clearLine(0);
+    clearLine(1);
+    delay(500);
     subMenu = 2;
     buttonEncoderLong = true;
     ms_button = ms;
@@ -197,26 +282,12 @@ void loop() {
 
   if (target - angle > (hold ? HYSTERESIS_HOLD : HYSTERESIS))
   {
-    if(digitalRead(PIN_RIGHT) == HIGH) {
-      digitalWrite(PIN_RIGHT, LOW);
-    }
-    lcd.setCursor(9, 0);
-    lcd.print("-->"); 
-    if(digitalRead(PIN_LEFT) == LOW){
-      digitalWrite(PIN_LEFT, HIGH);
-    }
+    cw();
   }
 
   if (angle - target > (hold ? HYSTERESIS_HOLD : HYSTERESIS))
   {
-    if(digitalRead(PIN_LEFT) == HIGH ){
-      digitalWrite(PIN_LEFT, LOW);
-    }
-    lcd.setCursor(9, 0);
-    lcd.print("<--"); 
-    if(digitalRead(PIN_RIGHT) == LOW){
-       digitalWrite(PIN_RIGHT, HIGH);
-    } 
+    ccw();
   }
 
   if ( abs(target - angle) < (hold ? HYSTERESIS_HOLD : HYSTERESIS))
@@ -224,7 +295,6 @@ void loop() {
     hold = true;
     digitalWrite(PIN_RIGHT, HIGH);
     digitalWrite(PIN_LEFT, HIGH);
-    //digitalWrite(LED_PIN, HIGH);
     lcd.setCursor(9, 0);
     lcd.print("   ");
   }
