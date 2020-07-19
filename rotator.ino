@@ -112,7 +112,7 @@ void loop() {
 }
   // Основной цикл
   if(subMenu == 1) {
-     currentTime = millis();
+  currentTime = millis();
   if (currentTime >= (loopTime + 5)) {
     encoder_A = digitalRead(PIN_A);
     if ((!encoder_A) && (encoder_A_prev)) {
