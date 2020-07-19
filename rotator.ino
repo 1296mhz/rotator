@@ -22,7 +22,7 @@
 #define BTN_RIGHT 4
 #define BTN_SELECT 5
 #define BTN_NONE 10
-#define VERSION "v19.7.20 - 10:27"
+#define VERSION "v19.7.20 - 20:51"
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 int target = 0;
 int calibration = 0;
@@ -30,6 +30,12 @@ int correctDelta = 0;
 bool buttonState;         // variable for reading the pushbutton status
 bool buttonEncoder = false;
 bool buttonEncoderLong = false;
+bool buttonCalEncoder = false;
+bool buttonCalEncoderLong = false;
+
+int flag = 0;                  // флаг состояния
+int regim = 0;    
+
 uint32_t ms_button = 0;
 bool hold;
 // 1 - Main, 2 - Calibration
@@ -37,12 +43,13 @@ int subMenu;
 float sensorValue = 0;  // variable to store the value coming from the sensor
 int preset = 180 ; // preset encoder;
 //iz fla encoder
-int currentTime, loopTime;
+int currentTime, loopTime, currentTimeCal, loopTimeCal ;
 
 int encoder_A, encoder_A_prev;
 String s_angle;
 String s_target;
 String s_pr;
+String s_calibration;
 int angle;
 
 void clearLine(int line){
@@ -98,7 +105,7 @@ void setup() {
   // Serial.begin(9600);
   // Serial.println("R8CDF!");
   // Serial.println(VERSION);
-  subMenu = 1;
+  subMenu = 0;
   lcd.begin(NUMCOLS, NUMROWS);
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -130,7 +137,7 @@ void setup() {
 
 
 void loop() {
-  
+  lcd.setCursor(15, 0);
   // read the value from the sensor:
   sensorValue = analogRead(SENSOR_PIN);
   //angle=sensorValue/2.8;
@@ -165,37 +172,108 @@ void loop() {
       break;
   }
 
-  // Calibration
-  if(subMenu == 2) {
-    lcd.setCursor(0, 0);
-    lcd.print("Calibration");
-    lcd.setCursor(0, 1);
-     lcd.print("                ");
     uint32_t ms = millis();
 
     buttonState = digitalRead(BUTTON_PIN);
     // Фиксируем нажатие кнопки   
-    if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
-       buttonEncoder = true;
-       buttonEncoderLong = false;
+    if (buttonState == LOW &&  flag == 0 && ( ms - ms_button ) > 2000) {
+
+       ms_button = ms;
+       lcd.setCursor(15, 0);
+       regim ++;
+       flag = 1;
+      
+       if(regim > 7)                     // Если номер режима превышает требуемого
+       {                               // то отсчет начинается с нуля
+          regim = 0;
+        }
+    }
+
+    if (buttonState == HIGH && flag == 1 && ( ms - ms_button ) > 50) {
+
+       ms_button = ms;
+       flag = 0;
+    }
+
+
+  if(regim == 0)
+    {
+    lcd.setCursor(0, 0);
+    lcd.print("Main");
+    }
+    
+// РЕЖИМ 1: R
+  if(regim == 1)
+    {
+    lcd.setCursor(0, 0);
+    lcd.print("Calibration");
+    }
+  // Calibration
+  if(subMenu == 2) {
+    lcd.print("C");
+    lcd.setCursor(0, 0);
+    lcd.print("Calibration");
+   // lcd.setCursor(0, 1);
+   // lcd.print("                ");
+    uint32_t ms = millis();
+
+    buttonState = digitalRead(BUTTON_PIN);
+    // Фиксируем нажатие кнопки   
+    if (buttonState == LOW && !buttonCalEncoderLong && ( ms - ms_button ) > 2000) {
+       buttonCalEncoder = true;
+       buttonCalEncoderLong = false;
        ms_button = ms;
        lcd.setCursor(15, 0);
        lcd.print("*");
-       delay(1000);
+       delay(2000);
        clearLine(0);
        clearLine(1);
-       subMenu = 1;
+       // subMenu = 1;
     }
 
     // Фиксируем отпускание кнопки   
-  if (buttonState == HIGH && buttonEncoder && ( ms - ms_button ) > 50) {
-    // turn LED off:
-    buttonEncoder = false;
-    ms_button = ms;
+    // if (buttonState == HIGH && buttonCalEncoder && ( ms - ms_button ) > 50) {
+    //   // turn LED off:
+    //   buttonCalEncoder = false;
+    //   ms_button = ms;  
+    // }
+
+  currentTimeCal = millis();
+  if (currentTimeCal >= (loopTimeCal + 5)) {
+    encoder_A = digitalRead(PIN_A);
+    if ((!encoder_A) && (encoder_A_prev)) {
+      if (digitalRead(PIN_B)) {
+        if (calibration + STEP <= 360) calibration += STEP;
+      }
+      else {
+        if (calibration - STEP >= 0) calibration -= STEP;
+      }
+    }
+    encoder_A_prev = encoder_A;
   }
+  
+  loopTimeCal = currentTimeCal;
+  if (calibration >= 100) {
+    s_calibration = String(calibration);
+  }
+  if (calibration < 100) {
+    s_calibration = " " + String(calibration);
+  }
+  if (calibration < 10) {
+    s_calibration = "  " + String(calibration);
+  }
+
+    lcd.setCursor(0, 1);
+    lcd.print("CAL AZ ");
+    lcd.setCursor(8, 1);
+    lcd.print(s_calibration);
 }
+
+
+  // ***********************
   // Основной цикл
-  if(subMenu == 1) {
+  if(subMenu == 0) {
+  lcd.print("M");
   currentTime = millis();
   if (currentTime >= (loopTime + 5)) {
     encoder_A = digitalRead(PIN_A);
