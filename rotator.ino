@@ -1,381 +1,321 @@
 #include <LiquidCrystal.h>
+#include "RotaryEncoder.h"
 
-/*
-   R8CDF Edition
-  Analog Input
-*/
 #define HYSTERESIS 1
 #define HYSTERESIS_HOLD 5
-#define STEP 1
+#define AZ_STEP 1
 #define NUMROWS 2
 #define NUMCOLS 16
-#define SENSOR_PIN A1 // select the input pin for the antenna potentiometer
-#define BUTTON_PIN 1   // the number of the pushbutton encoder pin
+#define AZ_P3022_V1_CW360_SENSOR_PIN A1 // select the input pin for the antenna potentiometer
+#define ENC_BUTTON_PIN 1   // the number of the pushbutton encoder pin
 //#define LED_PIN 13     // select the pin for the LED
-#define PIN_A 2
-#define PIN_B 3
-#define PIN_LEFT 11
-#define PIN_RIGHT 13
+#define PIN_CLK 2
+#define PIN_DT 3
+
+#define PIN_CCW 11 // Поворот против часовой стрелки
+#define PIN_CW 13 // Поворот по часовой стрелки
 #define BTN_UP   1
 #define BTN_DOWN 2
 #define BTN_LEFT 3
 #define BTN_RIGHT 4
 #define BTN_SELECT 5
 #define BTN_NONE 10
-#define VERSION "v19.7.20 - 20:51"
-LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
-int target = 0;
-int calibration = 0;
-int correctDelta = 0;
-bool buttonState;         // variable for reading the pushbutton status
+#define VERSION "v19.7.20 - 23:29"
+
+// задаем шаг энкодера и макс./мин. значение в главном меню
+#define STEPS  6
+#define POSMIN 0
+#define POSMAX 12
+int lastPos, newPos = 180;
+int currentTime, loopTime;
+int azEncoder, azEncoderPrev, azCalibrate, azCalibratePrev;
 bool buttonEncoder = false;
 bool buttonEncoderLong = false;
-bool buttonCalEncoder = false;
-bool buttonCalEncoderLong = false;
-
-int flag = 0;                  // флаг состояния
-int regim = 0;    
-
+bool buttonState;
+bool buttonWasUp = true;
+bool clearFlag = false;
 uint32_t ms_button = 0;
-bool hold;
-// 1 - Main, 2 - Calibration
-int subMenu;
-float sensorValue = 0;  // variable to store the value coming from the sensor
-int preset = 180 ; // preset encoder;
-//iz fla encoder
-int currentTime, loopTime, currentTimeCal, loopTimeCal ;
+const int buttonPin=2;// вывод кнопки 0 нажата 1 нет
+int calibrate = 0;
+// Для азимута
+bool azHold;
+int azAngleSensor = 0; // С сенcора угла азимута
+int azAngle = 0; // Угол азимута
+int azTarget = 0; // Цель для поворота
+int azPreset = 180;
+String strAzAngle;
+String strAzTarget;
+String strAzPres;
+String strAzCal;
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
+RotaryEncoder encoder(PIN_CLK, PIN_DT);       // пины подключение энкодера (DT, CLK)
 
-int encoder_A, encoder_A_prev;
-String s_angle;
-String s_target;
-String s_pr;
-String s_calibration;
-int angle;
 
-void clearLine(int line){
-  lcd.setCursor(0, line);
-  lcd.print("                ");
-}
+byte w = 0;
 
-void printDisplay(String message){
-  Serial.println(message);
-  lcd.setCursor(0, 1);
-  lcd.print(message);
-  delay(1000);
-  clearLine(1);
-}
-void cw() {
-  digitalWrite(PIN_RIGHT, LOW);
-  lcd.setCursor(9, 0);
-  lcd.print("-->"); 
-  digitalWrite(PIN_LEFT, HIGH);
-}
+uint32_t last_millis; // переменные: последний  millis
 
-void ccw() {
-  digitalWrite(PIN_LEFT, LOW);
-  lcd.setCursor(9, 0);
-  lcd.print("<--"); 
-  digitalWrite(PIN_RIGHT, HIGH);
-}
+int correct(int az, int cal) {
+  if(az < cal) {
+    return abs((az - cal) + az);
+  }
 
-int detectButton() {
-  int keyAnalog = analogRead(A0);
-  if (keyAnalog < 100) {
-    // Значение меньше 100 – нажата кнопка right
-    return BTN_RIGHT;
-  } else if (keyAnalog < 200) {
-    // Значение больше 100 (иначе мы бы вошли в предыдущий блок результата сравнения, но меньше 200 – нажата кнопка UP
-    return BTN_UP;
-  } else if (keyAnalog < 400) {
-    // Значение больше 200, но меньше 400 – нажата кнопка DOWN
-    return BTN_DOWN;
-  } else if (keyAnalog < 600) {
-    // Значение больше 400, но меньше 600 – нажата кнопка LEFT
-    return BTN_LEFT;
-  } else if (keyAnalog < 800) {
-    // Значение больше 600, но меньше 800 – нажата кнопка SELECT
-    return BTN_SELECT;
-  } else {
-    // Все остальные значения (до 1023) будут означать, что нажатий не было
-    return BTN_NONE;
+  if(az > cal) {
+    return abs((cal - az) - az);
+  }
+
+  if (az == cal) {
+     return az;
   }
 }
 
+void clearDisplay() {
+    // lcd.setCursor(0, 1);
+    // lcd.print("                ");
+    // lcd.setCursor(0, 0);
+    // lcd.print("                ");
+    lcd.clear();
+};
+void cw() {
+  digitalWrite(PIN_CW, LOW);
+  lcd.setCursor(9, 0);
+  lcd.print("-->"); 
+  digitalWrite(PIN_CCW, HIGH);
+}
+
+void ccw() {
+  digitalWrite(PIN_CCW, LOW);
+  lcd.setCursor(9, 0);
+  lcd.print("<--"); 
+  digitalWrite(PIN_CW, HIGH);
+}
+
 void setup() {
-  // Serial.begin(9600);
-  // Serial.println("R8CDF!");
-  // Serial.println(VERSION);
-  subMenu = 0;
   lcd.begin(NUMCOLS, NUMROWS);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("R8CDF Rotator");
-  lcd.setCursor(0, 1);
-  lcd.print(VERSION);
-  delay(2000);
-  clearLine(0);
-  clearLine(1);
-  // pinMode(6, OUTPUT);
-  pinMode(PIN_A, INPUT_PULLUP);
-  pinMode(PIN_B, INPUT_PULLUP);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(PIN_LEFT, OUTPUT);
-  pinMode(PIN_RIGHT, OUTPUT);
-  //pinMode(Motor, OUTPUT);
-  currentTime = millis();
-  loopTime = currentTime;
-  sensorValue = analogRead(SENSOR_PIN);
-  //volt=float(sensorValue)/202;
-  //angle=sensorValue/2.8;
-  angle = int(round(sensorValue /2.8));
-  //brightness=angle;
-  target = angle;
-  //digitalWrite(PIN_RIGHT, LOW);
-  //digitalWrite(PIN_LEFT, LOW);
-  encoder_A_prev = digitalRead(PIN_A);
+  delay(1000);
+  lcd.clear();
+  clearFlag = true;
+  pinMode(PIN_CLK, INPUT_PULLUP);
+  pinMode(PIN_DT, INPUT_PULLUP);
+  pinMode(ENC_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(PIN_CCW, OUTPUT);
+  pinMode(PIN_CW, OUTPUT);
+  last_millis = millis();  
+  // Читаем данные с сенсора и обновляем цель
+  azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
+  azAngle = int(round(azAngleSensor / 2.8));
+  azTarget = azAngle;
 }
 
+uint8_t button(){
+  if (digitalRead(ENC_BUTTON_PIN) == 1){ // кнопка не нажата     
+     last_millis = millis();
+     return 0;}
+   delay(30);
+   while (digitalRead(ENC_BUTTON_PIN) == 0);
+   delay(30);
+   if (last_millis+65 > millis()){ // ложное срабатывание
+     //Serial.println(millis()-last_millis);
+     last_millis = millis();
+     return 0;}
+   if (last_millis+300 > millis()){ // короткое нажатие меньше 0.30 сек
+     //Serial.println(millis()-last_millis);
+     last_millis = millis();
+     return 1;}
+   //Serial.println(millis()-last_millis);
+   last_millis = millis(); // длинное нажатие больше 0.30 сек
+   return 2;
+};
 
-void loop() {
-  lcd.setCursor(15, 0);
-  // read the value from the sensor:
-  sensorValue = analogRead(SENSOR_PIN);
-  //angle=sensorValue/2.8;
-  //angle=sensorValue/1024.0 * 360;
-  angle = int(round(sensorValue /2.8));
-  
-  int button = detectButton();
-  switch (button) {
-    case BTN_UP:
-      printDisplay("UP");
-      break;
-    case BTN_DOWN:
-      printDisplay("DOWN");
-      break;
-    case BTN_LEFT:
-    if(target >= 1) {
-      ccw();
-      target = angle;
-    }
-      break;
-    case BTN_RIGHT:
-    if(target <= 359) {
-      cw();
-      target = angle;
-    }
-      break;
-    case BTN_SELECT:
-      printDisplay("SELECT");
-      break;
-    default:
-      //printDisplay("Press any key");
-      break;
+void loop(){
+  while (w == 0) {
+  if(clearFlag) {
+      clearDisplay();
+      clearFlag = false;
   }
+  azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
+  azAngle = int(round(azAngleSensor / 2.8));
+  //buttonState = digitalRead(ENC_BUTTON_PIN);
 
-    uint32_t ms = millis();
-
-    buttonState = digitalRead(BUTTON_PIN);
-    // Фиксируем нажатие кнопки   
-    if (buttonState == LOW && flag == 0 && ( ms - ms_button ) > 2000) {
-
-       ms_button = ms;
-       lcd.setCursor(15, 0);
-       regim ++;
-       flag = 1;
-      
-       if(regim > 7)                     // Если номер режима превышает требуемого
-       {                               // то отсчет начинается с нуля
-          regim = 0;
-        }
-    }
-
-    if (buttonState == HIGH && flag == 1 && ( ms - ms_button ) > 50) {
-
-       ms_button = ms;
-       flag = 0;
-    }
-
-
-  if(regim == 0)
-    {
-    lcd.setCursor(0, 0);
-    lcd.print("Main");
-    }
-    
-// РЕЖИМ 1: R
-  if(regim == 1)
-    {
-    lcd.setCursor(0, 0);
-    lcd.print("Calibration");
-    }
-  // Calibration
-  if(subMenu == 2) {
-    lcd.print("C");
-    lcd.setCursor(0, 0);
-    lcd.print("Calibration");
-   // lcd.setCursor(0, 1);
-   // lcd.print("                ");
-    uint32_t ms = millis();
-
-    buttonState = digitalRead(BUTTON_PIN);
-    // Фиксируем нажатие кнопки   
-    if (buttonState == LOW && !buttonCalEncoderLong && ( ms - ms_button ) > 2000) {
-       buttonCalEncoder = true;
-       buttonCalEncoderLong = false;
-       ms_button = ms;
-       lcd.setCursor(15, 0);
-       lcd.print("*");
-       delay(2000);
-       clearLine(0);
-       clearLine(1);
-       // subMenu = 1;
-    }
-
-    // Фиксируем отпускание кнопки   
-    // if (buttonState == HIGH && buttonCalEncoder && ( ms - ms_button ) > 50) {
-    //   // turn LED off:
-    //   buttonCalEncoder = false;
-    //   ms_button = ms;  
-    // }
-
-  currentTimeCal = millis();
-  if (currentTimeCal >= (loopTimeCal + 5)) {
-    encoder_A = digitalRead(PIN_A);
-    if ((!encoder_A) && (encoder_A_prev)) {
-      if (digitalRead(PIN_B)) {
-        if (calibration + STEP <= 360) calibration += STEP;
-      }
-      else {
-        if (calibration - STEP >= 0) calibration -= STEP;
-      }
-    }
-    encoder_A_prev = encoder_A;
-  }
-  
-  loopTimeCal = currentTimeCal;
-  if (calibration >= 100) {
-    s_calibration = String(calibration);
-  }
-  if (calibration < 100) {
-    s_calibration = " " + String(calibration);
-  }
-  if (calibration < 10) {
-    s_calibration = "  " + String(calibration);
-  }
-
-    lcd.setCursor(0, 1);
-    lcd.print("CAL AZ ");
-    lcd.setCursor(8, 1);
-    lcd.print(s_calibration);
-}
-
-
-  // ***********************
-  // Основной цикл
-  if(subMenu == 0) {
-  lcd.print("M");
   currentTime = millis();
   if (currentTime >= (loopTime + 5)) {
-    encoder_A = digitalRead(PIN_A);
-    if ((!encoder_A) && (encoder_A_prev)) {
-      if (digitalRead(PIN_B)) {
-        if (preset + STEP <= 360) preset += STEP;
+    azEncoder = digitalRead(PIN_CLK);
+    if ((!azEncoder) && (azEncoderPrev)) {
+      if (digitalRead(PIN_DT)) {
+        if (azPreset + AZ_STEP <= 360) azPreset += AZ_STEP;
       }
       else {
-        if (preset - STEP >= 0) preset -= STEP;
+        if (azPreset - AZ_STEP >= 0) azPreset -= AZ_STEP;
       }
     }
-    encoder_A_prev = encoder_A;
+    azEncoderPrev = azEncoder;
   }
-  
+
   loopTime = currentTime;
-  if (preset >= 100) {
-    s_pr = String(preset);
-  }
-  if (preset < 100) {
-    s_pr = " " + String(preset);
-  }
-  if (preset < 10) {
-    s_pr = "  " + String(preset);
-  }
-  if (angle >= 100) {
-    s_angle = String(angle);
-  }
-  if (angle < 100) {
-   s_angle = " " + String(angle);
-  }
-  if (angle < 10) {
-    s_angle = "  " + String(angle);
+
+    switch (button()) {
+      case 1:  
+          azTarget = azPreset;
+          azHold = false;
+          if (azTarget >= 100){ strAzTarget=String(azTarget);}
+          if (azTarget < 100) {strAzTarget=" "+String(azTarget);}
+          if (azTarget < 10) {strAzTarget="  "+String(azTarget);}
+         break;
+      case 2:
+         delay(200);
+         lcd.clear();
+         clearFlag = true;
+         w = 1;
+         break;
+    } 
+
+     if (azPreset >= 100) {
+       strAzPres = String(azPreset);
+     }
+     if (azPreset < 100) {
+       strAzPres = " " + String(azPreset);
+     }
+     if (azPreset < 10) {
+       strAzPres = "  " + String(azPreset);
+     }
+     if (azAngle >= 100) {
+       strAzAngle = String(azAngle);
+     }
+     if (azAngle < 100) {
+      strAzAngle = " " + String(azAngle);
+     }
+     if (azAngle < 10) {
+       strAzAngle = "  " + String(azAngle);
+     }
+
+    String t = String(correct(azAngle, calibrate));
+
+     lcd.setCursor(0, 0);
+     lcd.print("AZ ");
+     lcd.setCursor(4, 0);
+     lcd.print(strAzAngle);
+
+     lcd.setCursor(12, 0);
+     lcd.print("C");
+     lcd.print(t);
+
+     lcd.setCursor(0, 1);
+     lcd.print("TGT ");
+     lcd.setCursor(4, 1);
+     lcd.print(strAzTarget);
+     lcd.setCursor(8, 1);
+     lcd.print("PRS ");
+     lcd.setCursor(13, 1);
+     lcd.print(strAzPres);
+
+     if (azTarget - azAngle > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
+       cw();
+     }
+
+     if (azAngle - azTarget > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
+       ccw();
+     }
+
+     if ( abs(azTarget - azAngle) < (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
+       azHold = true;
+       digitalWrite(PIN_CW, HIGH);
+       digitalWrite(PIN_CCW, HIGH);
+       lcd.setCursor(9, 0);
+       lcd.print("   ");
+    }
   }
 
-  uint32_t ms = millis();
-  buttonState = digitalRead(BUTTON_PIN);
- // Фиксируем нажатие кнопки   
-  if (buttonState == LOW && !buttonEncoder && ( ms - ms_button ) > 50) {
-    buttonEncoder = true;
-    buttonEncoderLong = false;
-    ms_button = ms;
-    lcd.setCursor(15, 0);
-    lcd.print("*");
-  }
-// Фиксируем длинное нажатие кнопки   
-  if (buttonState == LOW && !buttonEncoderLong && ( ms - ms_button ) > 2000) {
-    clearLine(0);
-    clearLine(1);
-    delay(500);
-    subMenu = 2;
-    buttonEncoderLong = true;
-    ms_button = ms;
-  }
+  while (w == 1) {
+    if(clearFlag) {
+       clearDisplay();
+       clearFlag = false;
+       lastPos = 0;
+    }
+    lcd.setCursor(0, 0);
+    lcd.print("CALE  MODE  EXIT");
 
-  // Фиксируем отпускание кнопки   
-  if (buttonState == HIGH && buttonEncoder && ( ms - ms_button ) > 50) {
-    // turn LED off:
-    target = preset;
-    hold = false;
-    buttonEncoder = false;
-    ms_button = ms;
-    lcd.setCursor(15, 0);
-    lcd.print(" ");
-    if (target >= 100){ s_target=String(target);}
-    if (target < 100) {s_target=" "+String(target);}
-    if (target < 10) {s_target="  "+String(target);}
-  }
+    // проверяем положение ручки энкодера
+    encoder.tick();
+    newPos = encoder.getPosition() * STEPS;
+    if (newPos < POSMIN) {
+      encoder.setPosition(POSMIN / STEPS);
+      newPos = POSMIN;
+    }
+    else if (newPos > POSMAX) {
+      encoder.setPosition(POSMAX / STEPS);
+      newPos = POSMAX;
+    }
 
-  //set the cursor to column 0, line 1
-  lcd.setCursor(0, 0);
-  lcd.print("AZ ");
-  lcd.setCursor(4, 0);
-  lcd.print(s_angle);
-  // Serial.println("AZ ");
-  // Serial.println(s_angle);
-  lcd.setCursor(0, 1);
-  lcd.print("TGT ");
-  lcd.setCursor(4, 1);
-  lcd.print(s_target);
-  lcd.setCursor(8, 1);
-  lcd.print("PRS ");
-  lcd.setCursor(13, 1);
-  lcd.print(s_pr);
+    if (lastPos != newPos) {
+      lcd.setCursor(lastPos, 1);
+      lcd.print("    ");
+      lcd.setCursor(newPos, 1);
+      lcd.print("====");
+      lastPos = newPos;
+    }
 
-  if (target - angle > (hold ? HYSTERESIS_HOLD : HYSTERESIS))
-  {
-    cw();
+    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
+    if (buttonWasUp && !buttonIsUp) {
+      delay(10);
+      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
+      if (!buttonIsUp  && newPos == 0)  { lcd.clear(); delay(500); clearFlag = true; w = 2; }
+      if (!buttonIsUp  && newPos == 6)  { lcd.clear(); delay(500); clearFlag = true; w = 3; }
+      if (!buttonIsUp  && newPos == 12) { lcd.clear(); delay(500); clearFlag = true; w = 0; }
+    }
   }
+  // CAL
+   while (w == 2) {
+    if(clearFlag) {
+       clearDisplay();
+       clearFlag = false;
+    }
+   currentTime = millis();
+  if (currentTime >= (loopTime + 5)) {
+    azCalibrate = digitalRead(PIN_CLK);
+    if ((!azCalibrate) && (azCalibratePrev)) {
+      if (digitalRead(PIN_DT)) {
+        if (calibrate + AZ_STEP <= 360) calibrate += AZ_STEP;
+      }
+      else {
+        if (calibrate - AZ_STEP >= 0) calibrate -= AZ_STEP;
+      }
+    }
+    azCalibratePrev = azCalibrate;
+  }
+ loopTime = currentTime;
 
-  if (angle - target > (hold ? HYSTERESIS_HOLD : HYSTERESIS))
-  {
-    ccw();
-  }
+     if (calibrate >= 100) {
+       strAzCal = String(calibrate);
+     }
+     if (calibrate < 100) {
+       strAzCal = " " + String(calibrate);
+     }
+     if (calibrate < 10) {
+       strAzCal = "  " + String(calibrate);
+     }
 
-  if ( abs(target - angle) < (hold ? HYSTERESIS_HOLD : HYSTERESIS))
-  {
-    hold = true;
-    digitalWrite(PIN_RIGHT, HIGH);
-    digitalWrite(PIN_LEFT, HIGH);
-    lcd.setCursor(9, 0);
-    lcd.print("   ");
-  }
-  }
- 
+    if(button() == 2) {
+      delay(1000);
+      clearFlag = true;
+      w = 0;
+    } 
+  
+    lcd.setCursor(0, 0);
+    lcd.print("CALIBRATE  ");
+    lcd.print(strAzAngle);
+    lcd.setCursor(0, 1);
+    lcd.print("CAL ");
+    lcd.setCursor(4, 1);
+    lcd.print(strAzCal);
+   }
+
+   while (w == 3) {
+       lcd.setCursor(1, 0);
+       lcd.print("MODE  ");
+   }
+
+
 }
