@@ -49,19 +49,17 @@ String strAzPres;
 String strAzCal;
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 RotaryEncoder encoder(PIN_CLK, PIN_DT);       // пины подключение энкодера (DT, CLK)
-
-
 byte w = 0;
 
 uint32_t last_millis; // переменные: последний  millis
 
 int correct(int az, int cal) {
   if(az < cal) {
-    return abs((az - cal) + az);
+    return (cal - az) + az;
   }
 
   if(az > cal) {
-    return abs((cal - az) - az);
+    return (az + cal) - az;
   }
 
   if (az == cal) {
@@ -70,12 +68,9 @@ int correct(int az, int cal) {
 }
 
 void clearDisplay() {
-    // lcd.setCursor(0, 1);
-    // lcd.print("                ");
-    // lcd.setCursor(0, 0);
-    // lcd.print("                ");
     lcd.clear();
 };
+
 void cw() {
   digitalWrite(PIN_CW, LOW);
   lcd.setCursor(9, 0);
@@ -138,6 +133,7 @@ void loop(){
   }
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
   azAngle = int(round(azAngleSensor / 2.8));
+  // correct(, calibrate);
   //buttonState = digitalRead(ENC_BUTTON_PIN);
 
   currentTime = millis();
@@ -232,7 +228,6 @@ void loop(){
     if(clearFlag) {
        clearDisplay();
        clearFlag = false;
-       lastPos = 0;
     }
     lcd.setCursor(0, 0);
     lcd.print("CALE  MODE  EXIT");
