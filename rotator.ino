@@ -176,7 +176,7 @@ void loop() {
 
     buttonState = digitalRead(BUTTON_PIN);
     // Фиксируем нажатие кнопки   
-    if (buttonState == LOW &&  flag == 0 && ( ms - ms_button ) > 2000) {
+    if (buttonState == LOW && flag == 0 && ( ms - ms_button ) > 2000) {
 
        ms_button = ms;
        lcd.setCursor(15, 0);
