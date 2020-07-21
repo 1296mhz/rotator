@@ -20,12 +20,23 @@
 #define BTN_RIGHT 4
 #define BTN_SELECT 5
 #define BTN_NONE 10
-#define VERSION "v19.7.20 - 23:29"
+#define VERSION "v22.7.20 - 1:26"
 
 // задаем шаг энкодера и макс./мин. значение в главном меню
 #define STEPS  6
 #define POSMIN 0
 #define POSMAX 12
+
+// Меню калибровки
+#define CAL_STEPS  6
+#define CAL_POSMIN 0
+#define CAL_POSMAX 12
+
+// Меню включение выключения
+#define TURN_STEPS  6
+#define TURN_POSMIN 0
+#define TURN_POSMAX 12
+
 int lastPos, newPos = 180;
 int currentTime, loopTime;
 int azEncoder, azEncoderPrev, azCalibrate, azCalibratePrev;
@@ -34,6 +45,7 @@ bool buttonEncoderLong = false;
 bool buttonState;
 bool buttonWasUp = true;
 bool clearFlag = false;
+bool onOffFlag = false;
 uint32_t ms_button = 0;
 const int buttonPin=2;// вывод кнопки 0 нажата 1 нет
 int calibrate = 0;
@@ -43,6 +55,7 @@ int azAngleSensor = 0; // С сенcора угла азимута
 int azAngle = 0; // Угол азимута
 int azTarget = 0; // Цель для поворота
 int azPreset = 180;
+
 String strAzAngle;
 String strAzTarget;
 String strAzPres;
@@ -50,21 +63,24 @@ String strAzCal;
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 RotaryEncoder encoder(PIN_CLK, PIN_DT);       // пины подключение энкодера (DT, CLK)
 byte w = 0;
-
+bool correctFlag = false;
 uint32_t last_millis; // переменные: последний  millis
 
-int correct(int az, int cal) {
-  if(az < cal) {
-    return (cal - az) + az;
+int correct(bool correctFlag, int az, int cal) {
+  if(correctFlag) {
+     if(az < cal) {
+       return (cal - az) + az;
+     }
+   
+     if(az > cal) {
+       return (az + cal) - az;
+     }
+   
+     if (az == cal) {
+        return az;
+     }
   }
-
-  if(az > cal) {
-    return (az + cal) - az;
-  }
-
-  if (az == cal) {
-     return az;
-  }
+  return az;
 }
 
 void clearDisplay() {
@@ -101,7 +117,8 @@ void setup() {
   last_millis = millis();  
   // Читаем данные с сенсора и обновляем цель
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
-  azAngle = int(round(azAngleSensor / 2.8));
+  //azAngle = int(round(azAngleSensor / 2.8));
+  azAngle = int(round(azAngleSensor / 1024.0 * 450));
   azTarget = azAngle;
 }
 
@@ -132,7 +149,7 @@ void loop(){
       clearFlag = false;
   }
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
-  azAngle = int(round(azAngleSensor / 2.8));
+  azAngle = int(round(azAngleSensor / 1024.0 * 450));
   // correct(, calibrate);
   //buttonState = digitalRead(ENC_BUTTON_PIN);
 
@@ -141,7 +158,7 @@ void loop(){
     azEncoder = digitalRead(PIN_CLK);
     if ((!azEncoder) && (azEncoderPrev)) {
       if (digitalRead(PIN_DT)) {
-        if (azPreset + AZ_STEP <= 360) azPreset += AZ_STEP;
+        if (azPreset + AZ_STEP <= 450) azPreset += AZ_STEP;
       }
       else {
         if (azPreset - AZ_STEP >= 0) azPreset -= AZ_STEP;
@@ -187,7 +204,7 @@ void loop(){
        strAzAngle = "  " + String(azAngle);
      }
 
-    String t = String(correct(azAngle, calibrate));
+    String t = String(correct(correctFlag, azAngle, calibrate));
 
      lcd.setCursor(0, 0);
      lcd.print("AZ ");
@@ -261,56 +278,177 @@ void loop(){
       if (!buttonIsUp  && newPos == 12) { lcd.clear(); delay(500); clearFlag = true; w = 0; }
     }
   }
-  // CAL
+  // Меню калибровка
    while (w == 2) {
     if(clearFlag) {
        clearDisplay();
        clearFlag = false;
     }
-   currentTime = millis();
-  if (currentTime >= (loopTime + 5)) {
-    azCalibrate = digitalRead(PIN_CLK);
-    if ((!azCalibrate) && (azCalibratePrev)) {
-      if (digitalRead(PIN_DT)) {
-        if (calibrate + AZ_STEP <= 360) calibrate += AZ_STEP;
-      }
-      else {
-        if (calibrate - AZ_STEP >= 0) calibrate -= AZ_STEP;
-      }
-    }
-    azCalibratePrev = azCalibrate;
-  }
- loopTime = currentTime;
 
-     if (calibrate >= 100) {
-       strAzCal = String(calibrate);
-     }
-     if (calibrate < 100) {
-       strAzCal = " " + String(calibrate);
-     }
-     if (calibrate < 10) {
-       strAzCal = "  " + String(calibrate);
-     }
 
-    if(button() == 2) {
-      delay(1000);
-      clearFlag = true;
-      w = 0;
-    } 
+    // if(button() == 2) {
+    //   delay(1000);
+    //   clearFlag = true;
+    //   w = 0;
+    // } 
   
     lcd.setCursor(0, 0);
-    lcd.print("CALIBRATE  ");
-    lcd.print(strAzAngle);
-    lcd.setCursor(0, 1);
-    lcd.print("CAL ");
-    lcd.setCursor(4, 1);
-    lcd.print(strAzCal);
+    lcd.print("ANGL  TURN  EXIT");
+
+    encoder.tick();
+    newPos = encoder.getPosition() * CAL_STEPS;
+    if (newPos < CAL_POSMIN) {
+      encoder.setPosition(CAL_POSMIN / CAL_STEPS);
+      newPos = CAL_POSMIN;
+    }
+    else if (newPos > CAL_POSMAX) {
+      encoder.setPosition(CAL_POSMAX / CAL_STEPS);
+      newPos = CAL_POSMAX;
+    }
+
+    if (lastPos != newPos) {
+      lcd.setCursor(lastPos, 1);
+      lcd.print("    ");
+      lcd.setCursor(newPos, 1);
+      lcd.print("====");
+      lastPos = newPos;
+    }
+
+    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
+    if (buttonWasUp && !buttonIsUp) {
+      delay(10);
+      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
+      if (!buttonIsUp  && newPos == 0)  { lcd.clear(); delay(500); clearFlag = true; w = 21; }
+      if (!buttonIsUp  && newPos == 6)  { lcd.clear(); delay(500); clearFlag = true; w = 22; }
+      if (!buttonIsUp  && newPos == 12)  { lcd.clear(); delay(500); clearFlag = true; w = 23; }
+    }
+
+   }
+  // Меню изменения угла коррекции
+  while (w == 21) {
+        if(clearFlag) {
+          clearDisplay();
+          clearFlag = false;
+        }
+        currentTime = millis();
+        if (currentTime >= (loopTime + 5)) {
+          azCalibrate = digitalRead(PIN_CLK);
+          if ((!azCalibrate) && (azCalibratePrev)) {
+            if (digitalRead(PIN_DT)) {
+              if (calibrate + AZ_STEP <= 450) calibrate += AZ_STEP;
+            }
+            else {
+              if (calibrate - AZ_STEP >= 0) calibrate -= AZ_STEP;
+            }
+          }
+          azCalibratePrev = azCalibrate;
+        }
+        loopTime = currentTime;
+      
+        if(button() == 2) {
+           delay(1000);
+           clearFlag = true;
+            w = 2;
+        } 
+           if (calibrate >= 100) {
+             strAzCal = String(calibrate);
+           }
+           if (calibrate < 100) {
+             strAzCal = " " + String(calibrate);
+           }
+           if (calibrate < 10) {
+             strAzCal = "  " + String(calibrate);
+           }
+
+        lcd.setCursor(0, 1);
+        lcd.print("ANGLE ");
+        lcd.setCursor(6, 1);
+        lcd.print(strAzCal);
+  }
+      // Меню включение и выключени коррекции
+    while (w == 22) {
+    if(clearFlag) {
+        clearDisplay();
+        clearFlag = false;
+        lcd.setCursor(0, 0);
+        lcd.print("ON    OFF   EXIT");
+    }
+    // if(!clearFlag) {
+    //     lcd.setCursor(0, 0);
+    //     lcd.print("ON    OFF   EXIT");
+    // }
+
+    encoder.tick();
+    newPos = encoder.getPosition() * TURN_STEPS;
+    if (newPos < TURN_POSMIN) {
+      encoder.setPosition(TURN_POSMIN / TURN_STEPS);
+      newPos = TURN_POSMIN;
+    }
+    else if (newPos > TURN_POSMAX) {
+      encoder.setPosition(TURN_POSMAX / TURN_STEPS);
+      newPos = TURN_POSMAX;
+    }
+
+    if (lastPos != newPos) {
+      lcd.setCursor(lastPos, 1);
+      lcd.print("    ");
+      lcd.setCursor(newPos, 1);
+      lcd.print("====");
+      lastPos = newPos;
+    }
+
+    if (correctFlag) {
+        lcd.setCursor(2, 0);
+        lcd.print("@");
+    }
+
+    if (!correctFlag) {
+        lcd.setCursor(9, 0);
+        lcd.print("@");
+    }
+
+    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
+    if (buttonWasUp && !buttonIsUp) {
+      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
+
+      if (!buttonIsUp && newPos == 0) { 
+            correctFlag = true;
+            lcd.setCursor(9, 0);
+            lcd.print(" ");
+      }
+
+      if (!buttonIsUp && newPos == 6) { 
+            lcd.setCursor(2, 0);
+            lcd.print(" ");
+            correctFlag = false;
+      }
+
+      if (!buttonIsUp && newPos == 12) { 
+            delay(50); 
+            clearFlag = true; 
+            w = 2; 
+      }
+    }  
    }
 
-   while (w == 3) {
-       lcd.setCursor(1, 0);
-       lcd.print("MODE  ");
-   }
+  //Exit
+  while (w == 23) {
+       if(clearFlag) {
+         clearDisplay();
+         clearFlag = false;
+       }
+   lcd.setCursor(1, 0);
+   clearFlag = true;
+   delay(1000);
+   w = 1;
+  }
 
-
+  while (w == 3) {
+    if(clearFlag) {
+      clearDisplay();
+      clearFlag = false;
+    }
+   lcd.setCursor(1, 0);
+   lcd.print("MODE  ");
+  }
 }
