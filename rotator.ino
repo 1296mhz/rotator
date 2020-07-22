@@ -46,8 +46,8 @@ bool buttonState;
 bool buttonWasUp = true;
 bool clearFlag = false;
 bool onOffFlag = false;
-
-const int buttonPin=2;// вывод кнопки 0 нажата 1 нет
+int azimuth_calibration_to[] = {};
+int buttonPin=2; // Кнопка 0 нажата 1 нет
 int calibrate = 0;
 // Для азимута
 bool azHold;
@@ -73,7 +73,7 @@ int correct(bool correctFlag, int az, int cal) {
      }
    
      if(az > cal) {
-       return abs((az + cal) - 360) + az;
+       return az - (az - cal);
      }
    
      if (az == cal) {
@@ -141,6 +141,18 @@ uint8_t button(){
    last_millis = millis(); // длинное нажатие больше 0.30 сек
    return 2;
 };
+
+
+void generateAzimuthMap(int azAngle, int calibrate) {
+      for (x= 0; x < 360 + 1; x++) {
+      if (azAngle + calibrate + x < 360) {
+        azimuth_calibration_to[x] = azAngle + calibrate + x;
+      }
+      if(calibrate + azAngle + x >= 360) {
+        azimuth_calibration_to[x] = Math.abs(360 - (calibrate + azAngle + x));
+      }
+    }
+}
 
 void loop(){
   while (w == 0) {
@@ -349,6 +361,7 @@ void loop(){
         lcd.print(strAzCal);
 
         if(button() == 2) {
+           generateAzimuthMap(azAngle, calibrate);
            delay(1000);
            clearFlag = true;
            w = 2;
