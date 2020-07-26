@@ -1,25 +1,21 @@
-#include <LiquidCrystal.h>
+// #include <LiquidCrystal.h>
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
 #include "RotaryEncoder.h"
 
 #define HYSTERESIS 1
 #define HYSTERESIS_HOLD 5
 #define AZ_STEP 1
-#define NUMROWS 2
-#define NUMCOLS 16
-#define AZ_P3022_V1_CW360_SENSOR_PIN A1 // select the input pin for the antenna potentiometer
-#define ENC_BUTTON_PIN 1   // the number of the pushbutton encoder pin
+
+#define AZ_P3022_V1_CW360_SENSOR_PIN A0 // select the input pin for the antenna potentiometer
+#define ENC_BUTTON_PIN 4   // the number of the pushbutton encoder pin
 //#define LED_PIN 13     // select the pin for the LED
 #define PIN_CLK 2
 #define PIN_DT 3
 
 #define PIN_CCW 11 // Поворот против часовой стрелки
-#define PIN_CW 13 // Поворот по часовой стрелки
-#define BTN_UP   1
-#define BTN_DOWN 2
-#define BTN_LEFT 3
-#define BTN_RIGHT 4
-#define BTN_SELECT 5
-#define BTN_NONE 10
+#define PIN_CW 12 // Поворот по часовой стрелки
+#define PIN_SPEED 13
 #define VERSION "v22.7.20 - 1:26"
 
 // задаем шаг энкодера и макс./мин. значение в главном меню
@@ -60,7 +56,8 @@ String strAzAngle;
 String strAzTarget;
 String strAzPres;
 String strAzCal;
-LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
+// LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
+LiquidCrystal_I2C lcd(0x27,16,2);
 RotaryEncoder encoder(PIN_CLK, PIN_DT);       // пины подключение энкодера (DT, CLK)
 byte w = 0;
 bool correctFlag = false;
@@ -102,7 +99,9 @@ void ccw() {
 }
 
 void setup() {
-  lcd.begin(NUMCOLS, NUMROWS);
+  lcd.init();                     
+  lcd.backlight();// Включаем подсветку дисплея
+  //lcd.begin(NUMCOLS, NUMROWS);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("R8CDF Rotator");
@@ -118,7 +117,7 @@ void setup() {
   // Читаем данные с сенсора и обновляем цель
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
   //azAngle = int(round(azAngleSensor / 2.8));
-  azAngle = int(round(azAngleSensor / 2.8));
+  azAngle = int(round(azAngleSensor / 1024.0 * 360));
   azTarget = azAngle;
 }
 
@@ -144,23 +143,23 @@ uint8_t button(){
 
 
 void generateAzimuthMap(int azAngle, int calibrate) {
-      for (x= 0; x < 360 + 1; x++) {
+      for (int x = 0; x < 359 + 1; x++) {
       if (azAngle + calibrate + x <= 360) {
         azimuth_calibration_to[x] = azAngle + calibrate + x;
       }
       if(calibrate + azAngle + x > 360) {
-        azimuth_calibration_to[x] = Math.abs(360 - (calibrate + azAngle + x));
+        azimuth_calibration_to[x] = abs(360 - (calibrate + azAngle + x));
       }
     }
 }
 
 int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibration_to){
   if(correctFlag) {
-    if(sizeof(azimuth_calibration_to) > 0){
-      return 
+    if(sizeof(azimuth_calibration_to) > 0) {
+      return azAngle;
     }
   }
-  return azAngle
+  return azAngle;
 }
 
 void loop(){
@@ -176,10 +175,10 @@ void loop(){
      lcd.print("PRS ");
   }
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
-  azAngle = int(round(azAngleSensor / 2.8));
+  azAngle = int(round(azAngleSensor / 1024.0 * 360));
 
   currentTime = millis();
-  if (currentTime >= (loopTime + 5)) {
+  if (currentTime >= (loopTime + 1)) {
     azEncoder = digitalRead(PIN_CLK);
     if ((!azEncoder) && (azEncoderPrev)) {
       if (digitalRead(PIN_DT)) {
@@ -204,11 +203,11 @@ void loop(){
          break;
       case 2:
          delay(200);
-         lcd.clear();
          clearFlag = true;
          w = 1;
          break;
     } 
+
 
      if (azPreset >= 100) {
        strAzPres = String(azPreset);
