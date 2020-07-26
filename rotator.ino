@@ -145,13 +145,22 @@ uint8_t button(){
 
 void generateAzimuthMap(int azAngle, int calibrate) {
       for (x= 0; x < 360 + 1; x++) {
-      if (azAngle + calibrate + x < 360) {
+      if (azAngle + calibrate + x <= 360) {
         azimuth_calibration_to[x] = azAngle + calibrate + x;
       }
-      if(calibrate + azAngle + x >= 360) {
+      if(calibrate + azAngle + x > 360) {
         azimuth_calibration_to[x] = Math.abs(360 - (calibrate + azAngle + x));
       }
     }
+}
+
+int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibration_to){
+  if(correctFlag) {
+    if(sizeof(azimuth_calibration_to) > 0){
+      return 
+    }
+  }
+  return azAngle
 }
 
 void loop(){
