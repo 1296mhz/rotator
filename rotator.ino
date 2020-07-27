@@ -15,9 +15,9 @@
 
 #define PIN_CCW 11 // Поворот против часовой стрелки
 #define PIN_CW 12 // Поворот по часовой стрелки
-#define PIN_SPEED 13
+#define PIN_SPEED 13 //Скорость поворота
 #define VERSION "v22.7.20 - 1:26"
-
+#define DMESG "R8CDF Rotator"
 // задаем шаг энкодера и макс./мин. значение в главном меню
 #define STEPS  6
 #define POSMIN 0
@@ -58,7 +58,7 @@ String strAzPres;
 String strAzCal;
 // LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 LiquidCrystal_I2C lcd(0x27,16,2);
-RotaryEncoder encoder(PIN_CLK, PIN_DT);       // пины подключение энкодера (DT, CLK)
+RotaryEncoder encoder(PIN_CLK, PIN_DT); // пины подключение энкодера (DT, CLK)
 byte w = 0;
 bool correctFlag = false;
 uint32_t last_millis; // переменные: последний  millis
@@ -99,12 +99,14 @@ void ccw() {
 }
 
 void setup() {
+  Serial.begin(9600);
   lcd.init();                     
-  lcd.backlight();// Включаем подсветку дисплея
-  //lcd.begin(NUMCOLS, NUMROWS);
+  lcd.backlight();
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("R8CDF Rotator");
+  lcd.print(DMESG);
+  Serial.println(DMESG);
+
   delay(1000);
   lcd.clear();
   clearFlag = true;
@@ -176,7 +178,8 @@ void loop(){
   }
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
   azAngle = int(round(azAngleSensor / 1024.0 * 360));
-
+   Serial.println(azAngle);
+  // delay(500);
   currentTime = millis();
   if (currentTime >= (loopTime + 1)) {
     azEncoder = digitalRead(PIN_CLK);
@@ -228,13 +231,13 @@ void loop(){
        strAzAngle = "  " + String(azAngle);
      }
 
-    String C = String(correct(correctFlag, azAngle, calibrate));
+    //String C = String(correct(correctFlag, azAngle, calibrate));
 
 
      lcd.setCursor(4, 0);
      lcd.print(strAzAngle);
-     lcd.setCursor(12, 0);
-     lcd.print(C);
+    //  lcd.setCursor(12, 0);
+    //  lcd.print(C);
      lcd.setCursor(4, 1);
      lcd.print(strAzTarget);
      lcd.setCursor(13, 1);
@@ -254,7 +257,7 @@ void loop(){
        digitalWrite(PIN_CCW, HIGH);
        lcd.setCursor(9, 0);
        lcd.print("   ");
-    }
+    }    
   }
 
   while (w == 1) {
