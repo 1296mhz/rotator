@@ -1,14 +1,14 @@
-// #include <LiquidCrystal.h>
-#include <Wire.h> 
-#include <LiquidCrystal_I2C.h>
+#include <LiquidCrystal.h>
+
 #include "RotaryEncoder.h"
 
 #define HYSTERESIS 1
 #define HYSTERESIS_HOLD 5
 #define AZ_STEP 1
-
-#define AZ_P3022_V1_CW360_SENSOR_PIN A0 // select the input pin for the antenna potentiometer
-#define ENC_BUTTON_PIN 4   // the number of the pushbutton encoder pin
+#define NUMROWS 2
+#define NUMCOLS 16
+#define AZ_P3022_V1_CW360_SENSOR_PIN A1 // select the input pin for the antenna potentiometer
+#define ENC_BUTTON_PIN 10   // the number of the pushbutton encoder pin
 //#define LED_PIN 13     // select the pin for the LED
 #define PIN_CLK 2
 #define PIN_DT 3
@@ -56,8 +56,7 @@ String strAzAngle;
 String strAzTarget;
 String strAzPres;
 String strAzCal;
-// LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
-LiquidCrystal_I2C lcd(0x27,16,2);
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 RotaryEncoder encoder(PIN_CLK, PIN_DT); // пины подключение энкодера (DT, CLK)
 byte w = 0;
 bool correctFlag = false;
@@ -99,15 +98,14 @@ void ccw() {
 }
 
 void setup() {
+  lcd.begin(NUMCOLS, NUMROWS);
   Serial.begin(9600);
-  lcd.init();                     
-  lcd.backlight();
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(DMESG);
   Serial.println(DMESG);
 
-  delay(1000);
+  delay(2000);
   lcd.clear();
   clearFlag = true;
   pinMode(PIN_CLK, INPUT_PULLUP);
@@ -177,11 +175,12 @@ void loop(){
      lcd.print("PRS ");
   }
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
+
   azAngle = int(round(azAngleSensor / 1024.0 * 360));
    Serial.println(azAngle);
   // delay(500);
   currentTime = millis();
-  if (currentTime >= (loopTime + 1)) {
+  if (currentTime >= (loopTime + 5)) {
     azEncoder = digitalRead(PIN_CLK);
     if ((!azEncoder) && (azEncoderPrev)) {
       if (digitalRead(PIN_DT)) {
