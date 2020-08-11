@@ -13,9 +13,9 @@
 #define PIN_CLK 2
 #define PIN_DT 3
 
-#define PIN_CCW 11 // Поворот против часовой стрелки
-#define PIN_CW 12 // Поворот по часовой стрелки
-#define PIN_SPEED 13 //Скорость поворота
+#define PIN_CCW 7 // Поворот против часовой стрелки
+#define PIN_CW 6 // Поворот по часовой стрелки
+#define PIN_SPEED 8 //Скорость поворота
 #define VERSION "v27.7.20 - 6:16"
 #define DMESG "R8CDF Rotator"
 // задаем шаг энкодера и макс./мин. значение в главном меню
