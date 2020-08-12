@@ -360,6 +360,20 @@ void loop(){
   
 
 
+    //для перемещения в перделах 1 градуса
+    // if ( azTarget - azAngle <= 1) {
+    //    speed(false);
+    //    Serial.print("CW ");
+    //    Serial.println(azTarget - azAngle);
+    //    cw();
+    // }
+
+    // if ( azTarget - azAngle <= -1) {
+    //    speed(false);
+    //    Serial.print("CW ");
+    //    Serial.println(azTarget - azAngle);
+    //    ccw();
+    // }
 
     if (azTarget - azAngle > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
        Serial.print("CW ");
@@ -384,30 +398,18 @@ void loop(){
        }
        ccw();
      }
-
-    // для перемещения в перделах 1 градуса
-    // if ( azTarget - azAngle >= 1) {
-    //    speed(false);
-    //    Serial.print("CW ");
-    //    Serial.println(azTarget - azAngle);
-    //    cw();
-    // }
-
-    // if ( azTarget - azAngle <= -1) {
-    //    speed(false);
-    //    Serial.print("CW ");
-    //    Serial.println(azTarget - azAngle);
-    //    ccw();
-    // }
     }
 
     if ( abs(azTarget - azAngle) < (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-
+      if (azTarget == azAngle) { 
        azHold = true;
        digitalWrite(PIN_CW, HIGH);
        digitalWrite(PIN_CCW, HIGH);
        lcd.setCursor(9, 0);
        lcd.print("   ");
+      }
+  
+
     }
 
 
@@ -429,8 +431,6 @@ void loop(){
      if (azAngle < 10) {
        strAzAngle = "  " + String(azAngle);
      }
-
-  
   }
 
   while (w == 1) {
