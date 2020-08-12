@@ -178,8 +178,39 @@ void setup() {
   // Читаем данные с сенсора и обновляем цель
   #ifdef ANALOG
    azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
-  #endif
   //azAngle = int(round(azAngleSensor / 2.8));
+  #endif
+#ifdef NETWORK
+  int size = udp.parsePacket();
+  int i =0;
+  char buffer[100];
+  int az;
+  int el;
+  if (size > 0) {
+    do
+      {
+        char* msg = (char*)malloc(size+1);
+        int len = udp.read(msg,size+1);
+        msg[len]=0;
+        sscanf(msg, "%d %d", &az, &el);
+        azAngleSensor = az;
+        free(msg);
+      }
+    while ((size = udp.available())>0);
+    udp.flush();
+
+    int success;
+    do
+      {
+        //Serial.println(udp.remoteIP());
+        success = udp.beginPacket(udp.remoteIP(),udp.remotePort());
+      }
+    while (!success);
+    success = udp.endPacket();
+    udp.stop();
+    udp.begin(41234);
+  }
+#endif
   azAngle = int(round(azAngleSensor / 1024.0 * 360));
   azTarget = azAngle;
 }
