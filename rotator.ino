@@ -2,12 +2,21 @@
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 #include "RotaryEncoder.h"
+#include <UIPEthernet.h>
 
 #define HYSTERESIS 1
 #define HYSTERESIS_HOLD 5
 #define AZ_STEP 1
 
 #define AZ_P3022_V1_CW360_SENSOR_PIN A0 // select the input pin for the antenna potentiometer
+
+#define MAC {0x00,0x01,0x02,0x03,0x04,0x07}
+#define IP {192,168,1,41}
+
+#define ANALOG
+#undef  ANALOG
+#define NETWORK
+
 #define ENC_BUTTON_PIN 4   // the number of the pushbutton encoder pin
 //#define LED_PIN 13     // select the pin for the LED
 #define PIN_CLK 2
@@ -32,6 +41,8 @@
 #define TURN_STEPS  6
 #define TURN_POSMIN 0
 #define TURN_POSMAX 12
+
+EthernetUDP udp;
 
 int lastPos, newPos = 180;
 int currentTime, loopTime;
@@ -98,31 +109,6 @@ void ccw() {
   digitalWrite(PIN_CW, HIGH);
 }
 
-void setup() {
-  Serial.begin(9600);
-  lcd.init();                     
-  lcd.backlight();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(DMESG);
-  Serial.println(DMESG);
-
-  delay(1000);
-  lcd.clear();
-  clearFlag = true;
-  pinMode(PIN_CLK, INPUT_PULLUP);
-  pinMode(PIN_DT, INPUT_PULLUP);
-  pinMode(ENC_BUTTON_PIN, INPUT_PULLUP);
-  pinMode(PIN_CCW, OUTPUT);
-  pinMode(PIN_CW, OUTPUT);
-  last_millis = millis();  
-  // Читаем данные с сенсора и обновляем цель
-  azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
-  //azAngle = int(round(azAngleSensor / 2.8));
-  azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  azTarget = azAngle;
-}
-
 uint8_t button(){
   if (digitalRead(ENC_BUTTON_PIN) == 1){ // кнопка не нажата     
      last_millis = millis();
@@ -164,6 +150,40 @@ int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibratio
   return azAngle;
 }
 
+void setup() {
+  #ifdef NETWORK
+    uint8_t mac[6] = MAC;
+    uint8_t ip[4] = IP;
+    Ethernet.begin(mac,IPAddress(ip));
+    int success = udp.begin(41234);
+  #endif
+  Serial.begin(9600);
+  lcd.init();                     
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(DMESG);
+  Serial.println(DMESG);
+
+  delay(1000);
+
+  lcd.clear();
+  clearFlag = true;
+  pinMode(PIN_CLK, INPUT_PULLUP);
+  pinMode(PIN_DT, INPUT_PULLUP);
+  pinMode(ENC_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(PIN_CCW, OUTPUT);
+  pinMode(PIN_CW, OUTPUT);
+  last_millis = millis();  
+  // Читаем данные с сенсора и обновляем цель
+  #ifdef ANALOG
+   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
+  #endif
+  //azAngle = int(round(azAngleSensor / 2.8));
+  azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  azTarget = azAngle;
+}
+
 void loop(){
   while (w == 0) {
   if(clearFlag) {
@@ -176,9 +196,45 @@ void loop(){
      lcd.setCursor(8, 1);
      lcd.print("PRS ");
   }
+
+#ifdef ANALOG
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
+#endif
+
+#ifdef NETWORK
+  int size = udp.parsePacket();
+  int i =0;
+  char buffer[100];
+  int az;
+  int el;
+  if (size > 0) {
+    do
+      {
+        char* msg = (char*)malloc(size+1);
+        int len = udp.read(msg,size+1);
+        msg[len]=0;
+        sscanf(msg, "%d %d", &az, &el);
+        azAngleSensor = az;
+        free(msg);
+      }
+    while ((size = udp.available())>0);
+    udp.flush();
+
+    int success;
+    do
+      {
+        //Serial.println(udp.remoteIP());
+        success = udp.beginPacket(udp.remoteIP(),udp.remotePort());
+      }
+    while (!success);
+    success = udp.endPacket();
+    udp.stop();
+    udp.begin(41234);
+  }
+#endif
+
   azAngle = int(round(azAngleSensor / 1024.0 * 360));
-   Serial.println(azAngle);
+  Serial.println("AZ: " + String(azAngle) + " EL: " + String(el));
   // delay(500);
   currentTime = millis();
   if (currentTime >= (loopTime + 1)) {
@@ -231,13 +287,8 @@ void loop(){
        strAzAngle = "  " + String(azAngle);
      }
 
-    //String C = String(correct(correctFlag, azAngle, calibrate));
-
-
      lcd.setCursor(4, 0);
      lcd.print(strAzAngle);
-    //  lcd.setCursor(12, 0);
-    //  lcd.print(C);
      lcd.setCursor(4, 1);
      lcd.print(strAzTarget);
      lcd.setCursor(13, 1);
