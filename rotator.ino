@@ -25,7 +25,7 @@
 #define PIN_CCW 7 // Поворот против часовой стрелки
 #define PIN_CW 6 // Поворот по часовой стрелки
 #define PIN_SPEED 8 //Скорость поворота
-#define VERSION "v27.7.20 - 6:16"
+#define VERSION "v12.8.20 - 20:29"
 #define DMESG "R8CDF Rotator"
 // задаем шаг энкодера и макс./мин. значение в главном меню
 #define STEPS  6
@@ -54,7 +54,7 @@ bool buttonWasUp = true;
 bool clearFlag = false;
 bool onOffFlag = false;
 int azimuth_calibration_to[] = {};
-int buttonPin=2; // Кнопка 0 нажата 1 нет
+int buttonPin = 2; // Кнопка 0 нажата 1 нет
 int calibrate = 0;
 // Для азимута
 bool azHold;
@@ -62,7 +62,8 @@ int azAngleSensor = 0; // С сенcора угла азимута
 int azAngle = 0; // Угол азимута
 int azTarget = 0; // Цель для поворота
 int azPreset = 180;
-
+int prevAz;
+int prevStopFlag;
 String strAzAngle;
 String strAzTarget;
 String strAzPres;
@@ -109,6 +110,33 @@ void ccw() {
   digitalWrite(PIN_CW, HIGH);
 }
 
+void speed(bool spd) {
+  if(spd){
+    lcd.setCursor(15, 0);
+    lcd.print("F"); 
+    digitalWrite(PIN_SPEED, HIGH);
+  }
+
+  if(!spd){
+    lcd.setCursor(15, 0);
+    lcd.print("S"); 
+    digitalWrite(PIN_SPEED, LOW);
+  }
+}
+
+void getSpeed() {
+    if(digitalRead(PIN_SPEED)){
+    lcd.setCursor(15, 0);
+    lcd.print("F"); 
+
+  }
+
+  if(!digitalRead(PIN_SPEED)){
+    lcd.setCursor(15, 0);
+    lcd.print("S"); 
+  }
+}
+
 uint8_t button(){
   if (digitalRead(ENC_BUTTON_PIN) == 1){ // кнопка не нажата     
      last_millis = millis();
@@ -151,6 +179,7 @@ int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibratio
 }
 
 void setup() {
+  speed(true);
   #ifdef NETWORK
     uint8_t mac[6] = MAC;
     uint8_t ip[4] = IP;
@@ -174,6 +203,7 @@ void setup() {
   pinMode(ENC_BUTTON_PIN, INPUT_PULLUP);
   pinMode(PIN_CCW, OUTPUT);
   pinMode(PIN_CW, OUTPUT);
+  pinMode(PIN_SPEED, OUTPUT);
   last_millis = millis();  
   // Читаем данные с сенсора и обновляем цель
   #ifdef ANALOG
@@ -182,7 +212,7 @@ void setup() {
   #endif
 #ifdef NETWORK
   int size = udp.parsePacket();
-  int i =0;
+  int i = 0;
   char buffer[100];
   int az;
   int el;
@@ -193,7 +223,12 @@ void setup() {
         int len = udp.read(msg,size+1);
         msg[len]=0;
         sscanf(msg, "%d %d", &az, &el);
-        azAngleSensor = az;
+        
+        if(prevAz != az) {
+          azAngleSensor = az;
+        }
+        prevAz = az;
+        
         free(msg);
       }
     while ((size = udp.available())>0);
@@ -211,7 +246,8 @@ void setup() {
     udp.begin(41234);
   }
 #endif
-  azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  azAngle = int(round(azAngleSensor / 2.8));
+  // azAngle = int(round(azAngleSensor / 1024 * 360));
   azTarget = azAngle;
 }
 
@@ -220,6 +256,7 @@ void loop(){
   if(clearFlag) {
       clearDisplay();
       clearFlag = false;
+      getSpeed();
      lcd.setCursor(0, 0);
      lcd.print("AZ ");
      lcd.setCursor(0, 1);
@@ -234,10 +271,11 @@ void loop(){
 
 #ifdef NETWORK
   int size = udp.parsePacket();
-  int i =0;
+  int i = 0;
   char buffer[100];
   int az;
   int el;
+
   if (size > 0) {
     do
       {
@@ -245,7 +283,11 @@ void loop(){
         int len = udp.read(msg,size+1);
         msg[len]=0;
         sscanf(msg, "%d %d", &az, &el);
-        azAngleSensor = az;
+
+        if(prevAz != az) {
+          azAngleSensor = az;
+        }
+        prevAz = az;
         free(msg);
       }
     while ((size = udp.available())>0);
@@ -254,7 +296,6 @@ void loop(){
     int success;
     do
       {
-        //Serial.println(udp.remoteIP());
         success = udp.beginPacket(udp.remoteIP(),udp.remotePort());
       }
     while (!success);
@@ -264,11 +305,16 @@ void loop(){
   }
 #endif
 
-  azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  Serial.println("AZ: " + String(azAngle) + " EL: " + String(el));
-  // delay(500);
+  azAngle = int(round(azAngleSensor / 2.8));
+  // azAngle = int(round(azAngleSensor / 1024 * 360));
+
+  if(prevAz != az) {
+      Serial.println("AZ: " + String(azAngle) + " EL: " + String(el));
+  }
+ 
+
   currentTime = millis();
-  if (currentTime >= (loopTime + 1)) {
+  if (currentTime >= (loopTime + 2)) {
     azEncoder = digitalRead(PIN_CLK);
     if ((!azEncoder) && (azEncoderPrev)) {
       if (digitalRead(PIN_DT)) {
@@ -279,6 +325,7 @@ void loop(){
       }
     }
     azEncoderPrev = azEncoder;
+    
   }
 
   loopTime = currentTime;
@@ -286,6 +333,10 @@ void loop(){
     switch (button()) {
       case 1:  
           azTarget = azPreset;
+          Serial.print("AZ ");
+          Serial.println(azAngle);
+          Serial.print("Target ");
+          Serial.println(azTarget);
           azHold = false;
           if (azTarget >= 100){ strAzTarget=String(azTarget);}
           if (azTarget < 100) {strAzTarget=" "+String(azTarget);}
@@ -297,6 +348,67 @@ void loop(){
          w = 1;
          break;
     } 
+
+     lcd.setCursor(4, 0);
+     lcd.print(strAzAngle);
+     lcd.setCursor(4, 1);
+     lcd.print(strAzTarget);
+     lcd.setCursor(13, 1);
+     lcd.print(strAzPres);
+
+    if (azTarget != azAngle) {
+  
+
+
+
+    if (azTarget - azAngle > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
+       Serial.print("CW ");
+       Serial.println(azTarget - azAngle);
+      if(abs(azTarget - azAngle) > 20){
+         speed(true);
+       }
+       if(abs(azTarget - azAngle) < 20){
+         speed(false);
+       }
+       cw();
+     }
+
+    if (azAngle - azTarget > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
+       Serial.print("CCW ");
+       Serial.println(azAngle - azTarget);
+        if(abs(azAngle - azTarget) > 20){
+         speed(true);
+       }
+       if(abs(azAngle - azTarget) < 20){
+         speed(false);
+       }
+       ccw();
+     }
+
+    // для перемещения в перделах 1 градуса
+    // if ( azTarget - azAngle >= 1) {
+    //    speed(false);
+    //    Serial.print("CW ");
+    //    Serial.println(azTarget - azAngle);
+    //    cw();
+    // }
+
+    // if ( azTarget - azAngle <= -1) {
+    //    speed(false);
+    //    Serial.print("CW ");
+    //    Serial.println(azTarget - azAngle);
+    //    ccw();
+    // }
+    }
+
+    if ( abs(azTarget - azAngle) < (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
+
+       azHold = true;
+       digitalWrite(PIN_CW, HIGH);
+       digitalWrite(PIN_CCW, HIGH);
+       lcd.setCursor(9, 0);
+       lcd.print("   ");
+    }
 
 
      if (azPreset >= 100) {
@@ -318,28 +430,7 @@ void loop(){
        strAzAngle = "  " + String(azAngle);
      }
 
-     lcd.setCursor(4, 0);
-     lcd.print(strAzAngle);
-     lcd.setCursor(4, 1);
-     lcd.print(strAzTarget);
-     lcd.setCursor(13, 1);
-     lcd.print(strAzPres);
-
-     if (azTarget - azAngle > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-       cw();
-     }
-
-     if (azAngle - azTarget > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-       ccw();
-     }
-
-     if ( abs(azTarget - azAngle) < (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-       azHold = true;
-       digitalWrite(PIN_CW, HIGH);
-       digitalWrite(PIN_CCW, HIGH);
-       lcd.setCursor(9, 0);
-       lcd.print("   ");
-    }    
+  
   }
 
   while (w == 1) {
@@ -347,7 +438,7 @@ void loop(){
        clearDisplay();
        clearFlag = false;
        lcd.setCursor(0, 0);
-       lcd.print("CALE  MODE  EXIT");
+       lcd.print("CAL   MODE  EXIT");
     }
 
     // проверяем положение ручки энкодера
