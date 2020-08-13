@@ -402,15 +402,11 @@ void loop(){
     }
 
     if ( abs(azTarget - azAngle) < (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-
        azHold = true;
        digitalWrite(PIN_CW, HIGH);
        digitalWrite(PIN_CCW, HIGH);
        lcd.setCursor(9, 0);
        lcd.print("   ");
-      
-  
-
     }
 
 
