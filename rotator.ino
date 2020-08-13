@@ -59,11 +59,11 @@ int buttonPin = 2; // Кнопка 0 нажата 1 нет
 int calibrate = 0;
 // Для азимута
 bool azHold;
-int azAngleSensor = 0; // С сенcора угла азимута
+float azAngleSensor = 0.0; // С сенcора угла азимута
 int azAngle = 0; // Угол азимута
 int azTarget = 0; // Цель для поворота
 int azPreset = 180;
-int prevAz;
+float prevAz;
 int prevStopFlag;
 String strAzAngle;
 String strAzTarget;
@@ -93,21 +93,58 @@ int correct(bool correctFlag, int az, int cal) {
   return az;
 }
 
+
+void getNetworkSensor() {
+  int size = udp.parsePacket();
+  int i = 0;
+  char buffer[100];
+  char az[7], el[7];
+  float azimuth;
+  if (size > 0) {
+    do
+      {
+        char* msg = (char*)malloc(size+1);
+        int len = udp.read(msg,size+1);
+        msg[len]=0;
+        sscanf(msg, "%s %s", &az, &el);
+        if(prevAz != azimuth) {
+           Serial.println(az);
+           azimuth=atof(az);
+           azAngleSensor = azimuth;
+        }
+        prevAz = azimuth;
+        
+        free(msg);
+      }
+    while ((size = udp.available())>0);
+    udp.flush();
+
+    int success;
+    do
+      {
+        success = udp.beginPacket(udp.remoteIP(),udp.remotePort());
+      }
+    while (!success);
+    success = udp.endPacket();
+    udp.stop();
+    udp.begin(PORT);
+}
+}
 void clearDisplay() {
     lcd.clear();
 };
 
 void cw() {
   digitalWrite(PIN_CW, LOW);
-  lcd.setCursor(13, 0);
-  lcd.print("->"); 
+  lcd.setCursor(14, 0);
+  lcd.print(">"); 
   digitalWrite(PIN_CCW, HIGH);
 }
 
 void ccw() {
   digitalWrite(PIN_CCW, LOW);
-  lcd.setCursor(13, 0);
-  lcd.print("<-"); 
+  lcd.setCursor(14, 0);
+  lcd.print("<"); 
   digitalWrite(PIN_CW, HIGH);
 }
 
@@ -126,19 +163,19 @@ void speed(bool spd) {
 }
 
 void getSpeed() {
-    if(digitalRead(PIN_SPEED)){
+    if(digitalRead(PIN_SPEED)) {
     lcd.setCursor(15, 0);
     lcd.print("F"); 
   }
 
-  if(!digitalRead(PIN_SPEED)){
+  if(!digitalRead(PIN_SPEED)) {
     lcd.setCursor(15, 0);
     lcd.print("S"); 
   }
 }
 
 uint8_t button(){
-  if (digitalRead(ENC_BUTTON_PIN) == 1){  
+  if (digitalRead(ENC_BUTTON_PIN) == 1) {  
      last_millis = millis();
      return 0;}
    delay(30);
@@ -166,7 +203,7 @@ void generateAzimuthMap(int azAngle, int calibrate) {
     }
 }
 
-int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibration_to){
+int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibration_to) {
   if(correctFlag) {
     if(sizeof(azimuth_calibration_to) > 0) {
       return azAngle;
@@ -209,103 +246,36 @@ void setup() {
   //azAngle = int(round(azAngleSensor / 2.8));
   #endif
   #ifdef NETWORK
-  int size = udp.parsePacket();
-  int i = 0;
-  char buffer[100];
-  int az;
-  int el;
-  if (size > 0) {
-    do
-      {
-        char* msg = (char*)malloc(size+1);
-        int len = udp.read(msg,size+1);
-        msg[len]=0;
-        sscanf(msg, "%d %d", &az, &el);
-        
-        if(prevAz != az) {
-          azAngleSensor = az;
-        }
-        prevAz = az;
-        
-        free(msg);
-      }
-    while ((size = udp.available())>0);
-    udp.flush();
-
-    int success;
-    do
-      {
-        success = udp.beginPacket(udp.remoteIP(),udp.remotePort());
-      }
-    while (!success);
-    success = udp.endPacket();
-    udp.stop();
-    udp.begin(41234);
-  }
+    getNetworkSensor();
   #endif
-  azAngle = int(round(azAngleSensor / 2.8));
-  // azAngle = int(round(azAngleSensor / 1024 * 360));
-  // azTarget = azAngle;
+ //azAngle = int(round(azAngleSensor / 2.8));
+ azAngle = int(round(azAngleSensor / 1020.0 * 360));
+
 }
 
-void loop(){
+void loop() {
   while (w == 0) {
-  if (clearFlag) {
-    clearDisplay();
-    clearFlag = false;
-    getSpeed();
-    lcd.setCursor(0, 0);
-    lcd.print("AZ ");
-    lcd.setCursor(0, 1);
-    lcd.print("TGT ");
-  }
+     if (clearFlag) {
+       clearDisplay();
+       clearFlag = false;
+       getSpeed();
+       lcd.setCursor(0, 0);
+       lcd.print("AZ ");
+       lcd.setCursor(0, 1);
+       lcd.print("TGT ");
+     }
 
 #ifdef ANALOG
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
 #endif
 
 #ifdef NETWORK
-  int size = udp.parsePacket();
-  int i = 0;
-  char buffer[100];
-  int az;
-  int el;
-
-  if (size > 0) {
-    do
-      {
-        char* msg = (char*)malloc(size+1);
-        int len = udp.read(msg,size+1);
-        msg[len]=0;
-        sscanf(msg, "%d %d", &az, &el);
-
-        if(prevAz != az) {
-          azAngleSensor = az;
-        }
-        prevAz = az;
-        free(msg);
-      }
-    while ((size = udp.available())>0);
-    udp.flush();
-
-    int success;
-    do
-      {
-        success = udp.beginPacket(udp.remoteIP(),udp.remotePort());
-      }
-    while (!success);
-    success = udp.endPacket();
-    udp.stop();
-    udp.begin(41234);
-  }
+   getNetworkSensor();
 #endif
 
-  azAngle = int(round(azAngleSensor / 2.8));
-  // azAngle = int(round(azAngleSensor / 1024 * 360));
-
- 
- // Serial.println("AZ: " + String(azAngle) + " EL: " + String(el));
-  
+  //azAngle = int(round(azAngleSensor / 2.8));
+  //azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  azAngle = int(round(azAngleSensor / 1020.0 * 360));
   currentTime = millis();
   if (currentTime >= (loopTime + 2)) {
     azEncoder = digitalRead(PIN_CLK);
@@ -334,13 +304,17 @@ void loop(){
           if (azTarget < 100) {strAzTarget=" "+String(azTarget);}
           if (azTarget < 10) {strAzTarget="  "+String(azTarget);}
          break;
-    
+      case 2:
+         delay(200);
+         clearFlag = true;
+         w = 1;
+         break;
     } 
 
-     lcd.setCursor(4, 0);
-     lcd.print(strAzAngle);
-     lcd.setCursor(4, 1);
-     lcd.print(strAzTarget);
+    lcd.setCursor(4, 0);
+    lcd.print(strAzAngle);
+    lcd.setCursor(4, 1);
+    lcd.print(strAzTarget);
 
     if (azMove) {
        if (azTarget - azAngle >= 1) {
@@ -369,8 +343,8 @@ void loop(){
 
        if (azTarget == azAngle) {
          azMove = false;
-         lcd.setCursor(13, 0);
-         lcd.print("  ");
+         lcd.setCursor(14, 0);
+         lcd.print(" ");
          digitalWrite(PIN_CW, HIGH);
          digitalWrite(PIN_CCW, HIGH);
        }
@@ -396,4 +370,5 @@ void loop(){
        strAzAngle = "  " + String(azAngle);
      }
   }
+
 }
