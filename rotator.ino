@@ -186,6 +186,7 @@ void setup() {
     Ethernet.begin(mac,IPAddress(ip));
     int success = udp.begin(41234);
   #endif
+
   Serial.begin(9600);
   lcd.init();                     
   lcd.backlight();
@@ -194,7 +195,7 @@ void setup() {
   lcd.print(DMESG);
   Serial.println(DMESG);
 
-  delay(1000);
+  delay(500);
 
   lcd.clear();
   clearFlag = true;
@@ -210,7 +211,7 @@ void setup() {
    azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
   //azAngle = int(round(azAngleSensor / 2.8));
   #endif
-#ifdef NETWORK
+  #ifdef NETWORK
   int size = udp.parsePacket();
   int i = 0;
   char buffer[100];
@@ -245,7 +246,7 @@ void setup() {
     udp.stop();
     udp.begin(41234);
   }
-#endif
+  #endif
   azAngle = int(round(azAngleSensor / 2.8));
   // azAngle = int(round(azAngleSensor / 1024 * 360));
   azTarget = azAngle;
@@ -308,9 +309,9 @@ void loop(){
   azAngle = int(round(azAngleSensor / 2.8));
   // azAngle = int(round(azAngleSensor / 1024 * 360));
 
-  if(prevAz != az) {
+ 
       Serial.println("AZ: " + String(azAngle) + " EL: " + String(el));
-  }
+  
  
 
   currentTime = millis();
@@ -401,13 +402,13 @@ void loop(){
     }
 
     if ( abs(azTarget - azAngle) < (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-      if (azTarget == azAngle) { 
+
        azHold = true;
        digitalWrite(PIN_CW, HIGH);
        digitalWrite(PIN_CCW, HIGH);
        lcd.setCursor(9, 0);
        lcd.print("   ");
-      }
+      
   
 
     }
