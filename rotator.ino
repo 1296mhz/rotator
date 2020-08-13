@@ -12,7 +12,7 @@
 
 #define MAC {0x00,0x01,0x02,0x03,0x04,0x07}
 #define IP {192,168,1,41}
-
+#define PORT 41234
 #define ANALOG
 #undef  ANALOG
 #define NETWORK
@@ -53,6 +53,7 @@ bool buttonState;
 bool buttonWasUp = true;
 bool clearFlag = false;
 bool onOffFlag = false;
+bool azMove = false;
 int azimuth_calibration_to[] = {};
 int buttonPin = 2; // Кнопка 0 нажата 1 нет
 int calibrate = 0;
@@ -98,15 +99,15 @@ void clearDisplay() {
 
 void cw() {
   digitalWrite(PIN_CW, LOW);
-  lcd.setCursor(9, 0);
-  lcd.print("-->"); 
+  lcd.setCursor(13, 0);
+  lcd.print("->"); 
   digitalWrite(PIN_CCW, HIGH);
 }
 
 void ccw() {
   digitalWrite(PIN_CCW, LOW);
-  lcd.setCursor(9, 0);
-  lcd.print("<--"); 
+  lcd.setCursor(13, 0);
+  lcd.print("<-"); 
   digitalWrite(PIN_CW, HIGH);
 }
 
@@ -128,7 +129,6 @@ void getSpeed() {
     if(digitalRead(PIN_SPEED)){
     lcd.setCursor(15, 0);
     lcd.print("F"); 
-
   }
 
   if(!digitalRead(PIN_SPEED)){
@@ -138,22 +138,19 @@ void getSpeed() {
 }
 
 uint8_t button(){
-  if (digitalRead(ENC_BUTTON_PIN) == 1){ // кнопка не нажата     
+  if (digitalRead(ENC_BUTTON_PIN) == 1){  
      last_millis = millis();
      return 0;}
    delay(30);
    while (digitalRead(ENC_BUTTON_PIN) == 0);
    delay(30);
-   if (last_millis+65 > millis()){ // ложное срабатывание
-     //Serial.println(millis()-last_millis);
+   if (last_millis+65 > millis()){
      last_millis = millis();
      return 0;}
-   if (last_millis+300 > millis()){ // короткое нажатие меньше 0.30 сек
-     //Serial.println(millis()-last_millis);
+   if (last_millis+300 > millis()){
      last_millis = millis();
      return 1;}
-   //Serial.println(millis()-last_millis);
-   last_millis = millis(); // длинное нажатие больше 0.30 сек
+   last_millis = millis();
    return 2;
 };
 
@@ -184,7 +181,7 @@ void setup() {
     uint8_t mac[6] = MAC;
     uint8_t ip[4] = IP;
     Ethernet.begin(mac,IPAddress(ip));
-    int success = udp.begin(41234);
+    int success = udp.begin(PORT);
   #endif
 
   Serial.begin(9600);
@@ -238,7 +235,6 @@ void setup() {
     int success;
     do
       {
-        //Serial.println(udp.remoteIP());
         success = udp.beginPacket(udp.remoteIP(),udp.remotePort());
       }
     while (!success);
@@ -249,21 +245,19 @@ void setup() {
   #endif
   azAngle = int(round(azAngleSensor / 2.8));
   // azAngle = int(round(azAngleSensor / 1024 * 360));
-  azTarget = azAngle;
+  // azTarget = azAngle;
 }
 
 void loop(){
   while (w == 0) {
-  if(clearFlag) {
-      clearDisplay();
-      clearFlag = false;
-      getSpeed();
-     lcd.setCursor(0, 0);
-     lcd.print("AZ ");
-     lcd.setCursor(0, 1);
-     lcd.print("TGT ");
-     lcd.setCursor(8, 1);
-     lcd.print("PRS ");
+  if (clearFlag) {
+    clearDisplay();
+    clearFlag = false;
+    getSpeed();
+    lcd.setCursor(0, 0);
+    lcd.print("AZ ");
+    lcd.setCursor(0, 1);
+    lcd.print("TGT ");
   }
 
 #ifdef ANALOG
@@ -310,19 +304,17 @@ void loop(){
   // azAngle = int(round(azAngleSensor / 1024 * 360));
 
  
-      Serial.println("AZ: " + String(azAngle) + " EL: " + String(el));
+ // Serial.println("AZ: " + String(azAngle) + " EL: " + String(el));
   
- 
-
   currentTime = millis();
   if (currentTime >= (loopTime + 2)) {
     azEncoder = digitalRead(PIN_CLK);
     if ((!azEncoder) && (azEncoderPrev)) {
       if (digitalRead(PIN_DT)) {
-        if (azPreset + AZ_STEP <= 360) azPreset += AZ_STEP;
+        if (azTarget + AZ_STEP <= 360) azTarget += AZ_STEP;
       }
       else {
-        if (azPreset - AZ_STEP >= 0) azPreset -= AZ_STEP;
+        if (azTarget - AZ_STEP >= 0) azTarget -= AZ_STEP;
       }
     }
     azEncoderPrev = azEncoder;
@@ -333,91 +325,66 @@ void loop(){
 
     switch (button()) {
       case 1:  
-          azTarget = azPreset;
           Serial.print("AZ ");
           Serial.println(azAngle);
           Serial.print("Target ");
           Serial.println(azTarget);
-          azHold = false;
+          azMove = true;
           if (azTarget >= 100){ strAzTarget=String(azTarget);}
           if (azTarget < 100) {strAzTarget=" "+String(azTarget);}
           if (azTarget < 10) {strAzTarget="  "+String(azTarget);}
          break;
-      case 2:
-         delay(200);
-         clearFlag = true;
-         w = 1;
-         break;
+    
     } 
 
      lcd.setCursor(4, 0);
      lcd.print(strAzAngle);
      lcd.setCursor(4, 1);
      lcd.print(strAzTarget);
-     lcd.setCursor(13, 1);
-     lcd.print(strAzPres);
 
-    if (azTarget != azAngle) {
-  
-
-
-    //для перемещения в перделах 1 градуса
-    // if ( azTarget - azAngle <= 1) {
-    //    speed(false);
-    //    Serial.print("CW ");
-    //    Serial.println(azTarget - azAngle);
-    //    cw();
-    // }
-
-    // if ( azTarget - azAngle <= -1) {
-    //    speed(false);
-    //    Serial.print("CW ");
-    //    Serial.println(azTarget - azAngle);
-    //    ccw();
-    // }
-
-    if (azTarget - azAngle > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-       Serial.print("CW ");
-       Serial.println(azTarget - azAngle);
-      if(abs(azTarget - azAngle) > 20){
-         speed(true);
+    if (azMove) {
+       if (azTarget - azAngle >= 1) {
+          Serial.print("CW ");
+          Serial.println(azTarget - azAngle);
+         if(abs(azTarget - azAngle) > 20){
+            speed(true);
+          }
+          if(abs(azTarget - azAngle) < 20){
+            speed(false);
+          }
+          cw();
        }
-       if(abs(azTarget - azAngle) < 20){
-         speed(false);
+
+       if (azAngle - azTarget >= 1) {
+          Serial.print("CCW ");
+          Serial.println(azAngle - azTarget);
+           if(abs(azAngle - azTarget) > 20){
+            speed(true);
+          }
+          if(abs(azAngle - azTarget) < 20){
+            speed(false);
+          }
+          ccw();
        }
-       cw();
-     }
 
-    if (azAngle - azTarget > (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-       Serial.print("CCW ");
-       Serial.println(azAngle - azTarget);
-        if(abs(azAngle - azTarget) > 20){
-         speed(true);
+       if (azTarget == azAngle) {
+         azMove = false;
+         lcd.setCursor(13, 0);
+         lcd.print("  ");
+         digitalWrite(PIN_CW, HIGH);
+         digitalWrite(PIN_CCW, HIGH);
        }
-       if(abs(azAngle - azTarget) < 20){
-         speed(false);
-       }
-       ccw();
-     }
-    }
+    
+    } 
 
-    if ( abs(azTarget - azAngle) < (azHold ? HYSTERESIS_HOLD : HYSTERESIS)) {
-       azHold = true;
-       digitalWrite(PIN_CW, HIGH);
-       digitalWrite(PIN_CCW, HIGH);
-       lcd.setCursor(9, 0);
-       lcd.print("   ");
-    }
-
-
-     if (azPreset >= 100) {
-       strAzPres = String(azPreset);
+     if (azTarget >= 100) {
+       strAzTarget = String(azTarget);
      }
-     if (azPreset < 100) {
-       strAzPres = " " + String(azPreset);
+     if (azTarget < 100) {
+       strAzTarget = " " + String(azTarget);
      }
-     if (azPreset < 10) {
-       strAzPres = "  " + String(azPreset);
+     if (azTarget < 10) {
+       strAzTarget = "  " + String(azTarget);
      }
      if (azAngle >= 100) {
        strAzAngle = String(azAngle);
@@ -428,206 +395,5 @@ void loop(){
      if (azAngle < 10) {
        strAzAngle = "  " + String(azAngle);
      }
-  }
-
-  while (w == 1) {
-    if(clearFlag) {
-       clearDisplay();
-       clearFlag = false;
-       lcd.setCursor(0, 0);
-       lcd.print("CAL   MODE  EXIT");
-    }
-
-    // проверяем положение ручки энкодера
-    encoder.tick();
-    newPos = encoder.getPosition() * STEPS;
-    if (newPos < POSMIN) {
-      encoder.setPosition(POSMIN / STEPS);
-      newPos = POSMIN;
-    }
-    else if (newPos > POSMAX) {
-      encoder.setPosition(POSMAX / STEPS);
-      newPos = POSMAX;
-    }
-
-    if (lastPos != newPos) {
-      lcd.setCursor(lastPos, 1);
-      lcd.print("    ");
-      lcd.setCursor(newPos, 1);
-      lcd.print("====");
-      lastPos = newPos;
-    }
-
-    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-    if (buttonWasUp && !buttonIsUp) {
-      delay(10);
-      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-      if (!buttonIsUp  && newPos == 0)  { lcd.clear(); delay(500); clearFlag = true; w = 2; }
-      if (!buttonIsUp  && newPos == 6)  { lcd.clear(); delay(500); clearFlag = true; w = 3; }
-      if (!buttonIsUp  && newPos == 12) { lcd.clear(); delay(500); clearFlag = true; w = 0; }
-    }
-  }
-  // Меню калибровка
-   while (w == 2) {
-    if(clearFlag) {
-       clearDisplay();
-       clearFlag = false;
-       lcd.setCursor(0, 0);
-       lcd.print("ANGL  TURN  EXIT");
-    }
-  
-    encoder.tick();
-    newPos = encoder.getPosition() * CAL_STEPS;
-    if (newPos < CAL_POSMIN) {
-      encoder.setPosition(CAL_POSMIN / CAL_STEPS);
-      newPos = CAL_POSMIN;
-    }
-    else if (newPos > CAL_POSMAX) {
-      encoder.setPosition(CAL_POSMAX / CAL_STEPS);
-      newPos = CAL_POSMAX;
-    }
-
-    if (lastPos != newPos) {
-      lcd.setCursor(lastPos, 1);
-      lcd.print("    ");
-      lcd.setCursor(newPos, 1);
-      lcd.print("====");
-      lastPos = newPos;
-    }
-
-    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-    if (buttonWasUp && !buttonIsUp) {
-      delay(10);
-      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-      if (!buttonIsUp  && newPos == 0)  { lcd.clear(); delay(500); clearFlag = true; w = 21; }
-      if (!buttonIsUp  && newPos == 6)  { lcd.clear(); delay(500); clearFlag = true; w = 22; }
-      if (!buttonIsUp  && newPos == 12)  { lcd.clear(); delay(500); clearFlag = true; w = 23; }
-    }
-
-   }
-  // Меню изменения угла коррекции
-  while (w == 21) {
-        if(clearFlag) {
-          clearDisplay();
-          clearFlag = false;
-          lcd.setCursor(0, 1);
-          lcd.print("ANGLE ");
-        }
-        currentTime = millis();
-        if (currentTime >= (loopTime + 1)) {
-          azCalibrate = digitalRead(PIN_CLK);
-          if ((!azCalibrate) && (azCalibratePrev)) {
-            if (digitalRead(PIN_DT)) {
-              if (calibrate + AZ_STEP <= 360) calibrate += AZ_STEP;
-            }
-            else {
-              if (calibrate - AZ_STEP >= 0) calibrate -= AZ_STEP;
-            }
-          }
-          azCalibratePrev = azCalibrate;
-        }
-        loopTime = currentTime;
-      
-        if (calibrate >= 100) {
-          strAzCal = String(calibrate);
-        }
-        if (calibrate < 100) {
-          strAzCal = " " + String(calibrate);
-        }
-        if (calibrate < 10) {
-          strAzCal = "  " + String(calibrate);
-        }
-
-        lcd.setCursor(6, 1);
-        lcd.print(strAzCal);
-
-        if(button() == 2) {
-           generateAzimuthMap(azAngle, calibrate);
-           delay(1000);
-           clearFlag = true;
-           w = 2;
-        } 
-  }
-      // Меню включение и выключени коррекции
-    while (w == 22) {
-    if(clearFlag) {
-        clearDisplay();
-        clearFlag = false;
-        lcd.setCursor(0, 0);
-        lcd.print("ON    OFF   EXIT");
-    }
-
-    encoder.tick();
-    newPos = encoder.getPosition() * TURN_STEPS;
-    if (newPos < TURN_POSMIN) {
-      encoder.setPosition(TURN_POSMIN / TURN_STEPS);
-      newPos = TURN_POSMIN;
-    }
-    else if (newPos > TURN_POSMAX) {
-      encoder.setPosition(TURN_POSMAX / TURN_STEPS);
-      newPos = TURN_POSMAX;
-    }
-
-    if (lastPos != newPos) {
-      lcd.setCursor(lastPos, 1);
-      lcd.print("    ");
-      lcd.setCursor(newPos, 1);
-      lcd.print("====");
-      lastPos = newPos;
-    }
-
-    if (correctFlag) {
-        lcd.setCursor(2, 0);
-        lcd.print("@");
-    }
-
-    if (!correctFlag) {
-        lcd.setCursor(9, 0);
-        lcd.print("@");
-    }
-
-    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-    if (buttonWasUp && !buttonIsUp) {
-      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-
-      if (!buttonIsUp && newPos == 0) { 
-            correctFlag = true;
-            lcd.setCursor(9, 0);
-            lcd.print(" ");
-      }
-
-      if (!buttonIsUp && newPos == 6) { 
-            lcd.setCursor(2, 0);
-            lcd.print(" ");
-            correctFlag = false;
-      }
-
-      if (!buttonIsUp && newPos == 12) { 
-            delay(50); 
-            clearFlag = true; 
-            w = 2; 
-      }
-    }  
-   }
-
-  //Exit
-  while (w == 23) {
-       if(clearFlag) {
-         clearDisplay();
-         clearFlag = false;
-       }
-   lcd.setCursor(1, 0);
-   clearFlag = true;
-   delay(1000);
-   w = 1;
-  }
-
-  while (w == 3) {
-    if(clearFlag) {
-      clearDisplay();
-      clearFlag = false;
-    }
-   lcd.setCursor(1, 0);
-   lcd.print("MODE  ");
   }
 }
