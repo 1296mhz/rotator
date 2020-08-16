@@ -379,20 +379,13 @@ void loop()
 
     if (keyAnalog < 200 && keyAnalog > 100)
     {
- 
+
       if ((millis() - buttonPressTime > 1500))
       {
-        if (azMove != true)
+        if (azMove != true && elMove != true)
         {
-          Serial.println(">>> !azMove");
-          Serial.println(azMove);
           appScreen = 1;
         }
-
-        // if (!elMove)
-        // {
-        //   appScreen = 1;
-        // }
 
         buttonState = true;
         buttonPressTime = millis();
