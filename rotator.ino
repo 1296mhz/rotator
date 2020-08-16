@@ -652,6 +652,7 @@ void loop()
       }
 
       loopTime = currentTime;
+      generateAzimuthMap(azAngle, offsetAz);
     }
 
     if (switchAzEl == 2)
