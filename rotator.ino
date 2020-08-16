@@ -1,15 +1,13 @@
 // #include <LiquidCrystal.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include "RotaryEncoder.h"
+// #include "RotaryEncoder.h"
 #include <UIPEthernet.h>
 
-#define HYSTERESIS 1
-#define HYSTERESIS_HOLD 5
 #define AZ_STEP 1
-
+#define EL_STEP 1
 #define AZ_P3022_V1_CW360_SENSOR_PIN A0 // select the input pin for the antenna potentiometer
-
+#undef AZ_P3022_V1_CW360_SENSOR_PIN
 #define MAC                            \
   {                                    \
     0x00, 0x01, 0x02, 0x03, 0x04, 0x07 \
@@ -31,28 +29,20 @@
 #define PIN_CCW 7   // Поворот против часовой стрелки
 #define PIN_CW 6    // Поворот по часовой стрелки
 #define PIN_SPEED 8 //Скорость поворота
-#define VERSION "v12.8.20 - 20:29"
-#define DMESG "R8CDF Rotator"
-// задаем шаг энкодера и макс./мин. значение в главном меню
-#define STEPS 6
-#define POSMIN 0
-#define POSMAX 12
 
-// Меню калибровки
-#define CAL_STEPS 6
-#define CAL_POSMIN 0
-#define CAL_POSMAX 12
+#define PIN_TO_SKY 5    // В небо
+#define PIN_TO_GROUND 9 // В землю
 
-// Меню включение выключения
-#define TURN_STEPS 6
-#define TURN_POSMIN 0
-#define TURN_POSMAX 12
+//Кнопки
+#define BTN_AZ_EL 1
+#define CTRL_KEYS A0
 
 EthernetUDP udp;
 
-int lastPos, newPos = 180;
+// int lastPos, newPos = 180;
 int currentTime, loopTime;
-int azEncoder, azEncoderPrev, azCalibrate, azCalibratePrev;
+int azEncoder, azEncoderPrev;
+int elEncoder, elEncoderPrev;
 bool buttonEncoder = false;
 bool buttonEncoderLong = false;
 bool buttonState;
@@ -60,57 +50,40 @@ bool buttonWasUp = true;
 bool clearFlag = false;
 bool onOffFlag = false;
 bool azMove = false;
-int azimuth_calibration_to[] = {};
-int buttonPin = 2; // Кнопка 0 нажата 1 нет
-int calibrate = 0;
+bool elMove = false;
+int azimuth_calibration_to[360] = {};
+int buttonPin = 2;
+
 // Для азимута
-bool azHold;
+
 float azAngleSensor = 0.0; // С сенcора угла азимута
+float elAngleSensor = 0.0; // С сенcора угла элевации
 int azAngle = 0;           // Угол азимута
-int azTarget = 0;          // Цель для поворота
-int azPreset = 180;
-float prevAz;
+int azTarget = 180;        // Цель для поворота
+int elAngle = 0;
+int elTarget = 0;
+
 int prevStopFlag;
+byte switchAzEl = 1;
+
 String strAzAngle;
 String strAzTarget;
-String strAzPres;
-String strAzCal;
-// LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
+
+String strElAngle;
+String strElTarget;
+
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-RotaryEncoder encoder(PIN_CLK, PIN_DT); // пины подключение энкодера (DT, CLK)
-byte w = 0;
+// Экран 0 - рабочий, 1 - калибровка
+int w = 0;
 bool correctFlag = false;
-uint32_t last_millis; // переменные: последний  millis
-
-int correct(bool correctFlag, int az, int cal)
-{
-  if (correctFlag)
-  {
-    if (az < cal)
-    {
-      return 360 - ((360 - (cal - az)) - az);
-    }
-
-    if (az > cal)
-    {
-      return az - (az - cal);
-    }
-
-    if (az == cal)
-    {
-      return az;
-    }
-  }
-  return az;
-}
-
+uint32_t last_millis;
+// int currentValue, prevValue;
 void getNetworkSensor()
 {
   int size = udp.parsePacket();
   int i = 0;
-  char buffer[100];
+
   char az[7], el[7];
-  float azimuth;
   if (size > 0)
   {
     do
@@ -119,14 +92,8 @@ void getNetworkSensor()
       int len = udp.read(msg, size + 1);
       msg[len] = 0;
       sscanf(msg, "%s %s", &az, &el);
-      if (prevAz != azimuth)
-      {
-        Serial.println(az);
-        azimuth = atof(az);
-        azAngleSensor = azimuth;
-      }
-      prevAz = azimuth;
-
+      azAngleSensor = atof(az);
+      elAngleSensor = atof(el);
       free(msg);
     } while ((size = udp.available()) > 0);
     udp.flush();
@@ -194,6 +161,20 @@ void getSpeed()
   }
 }
 
+void sky()
+{
+  // dummy func
+  Serial.println("To sky");
+  elAngle++;
+}
+
+void ground()
+{
+  // dummy func
+  Serial.println("To ground");
+  elAngle--;
+}
+
 uint8_t button()
 {
   if (digitalRead(ENC_BUTTON_PIN) == 1)
@@ -219,19 +200,20 @@ uint8_t button()
   return 2;
 };
 
-void generateAzimuthMap(int azAngle, int calibrate)
+int generateAzimuthMap(int azAngle, int calibrate)
 {
   for (int x = 0; x < 359 + 1; x++)
   {
-    if (azAngle + calibrate + x <= 360)
+    if (azAngle + calibrate + x <= 359)
     {
       azimuth_calibration_to[x] = azAngle + calibrate + x;
     }
-    if (calibrate + azAngle + x > 360)
+    if (calibrate + azAngle + x > 359)
     {
-      azimuth_calibration_to[x] = abs(360 - (calibrate + azAngle + x));
+      azimuth_calibration_to[x] = abs(359 - (calibrate + azAngle + x));
     }
   }
+  return azimuth_calibration_to;
 }
 
 int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibration_to)
@@ -240,7 +222,8 @@ int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibratio
   {
     if (sizeof(azimuth_calibration_to) > 0)
     {
-      return azAngle;
+
+      return azAngle + 5;
     }
   }
   return azAngle;
@@ -255,14 +238,11 @@ void setup()
   Ethernet.begin(mac, IPAddress(ip));
   int success = udp.begin(PORT);
 #endif
-
   Serial.begin(9600);
   lcd.init();
   lcd.backlight();
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(DMESG);
-  Serial.println(DMESG);
 
   delay(500);
 
@@ -275,7 +255,6 @@ void setup()
   pinMode(PIN_CW, OUTPUT);
   pinMode(PIN_SPEED, OUTPUT);
   last_millis = millis();
-// Читаем данные с сенсора и обновляем цель
 #ifdef ANALOG
   azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
 //azAngle = int(round(azAngleSensor / 2.8));
@@ -287,93 +266,184 @@ void setup()
   azAngle = int(round(azAngleSensor / 1020.0 * 360));
 }
 
+int Az_El()
+{
+  if (switchAzEl == 1)
+  {
+    switchAzEl = 2;
+  }
+  else if (switchAzEl == 2)
+  {
+    switchAzEl = 1;
+  }
+
+  return switchAzEl;
+}
+
+void CursorAzEl()
+{
+  if (switchAzEl == 1)
+  {
+    lcd.setCursor(1, 0);
+    lcd.print(">");
+    lcd.setCursor(1, 1);
+    lcd.print(" ");
+  }
+  if (switchAzEl == 2)
+  {
+    lcd.setCursor(1, 0);
+    lcd.print(" ");
+    lcd.setCursor(1, 1);
+    lcd.print(">");
+  }
+}
+
 void loop()
 {
   while (w == 0)
   {
+
     if (clearFlag)
     {
       clearDisplay();
       clearFlag = false;
       getSpeed();
       lcd.setCursor(0, 0);
-      lcd.print("AZ ");
+      lcd.print("A ");
       lcd.setCursor(0, 1);
-      lcd.print("TGT ");
+      lcd.print("E ");
     }
-
-#ifdef ANALOG
-    azAngleSensor = analogRead(AZ_P3022_V1_CW360_SENSOR_PIN);
-#endif
 
 #ifdef NETWORK
     getNetworkSensor();
 #endif
+    boolean buttonState;
+    int buttonPressTime;
+    int keyAnalog = analogRead(CTRL_KEYS);
+    if (keyAnalog < 100)
+    {
+      if ((millis() - buttonPressTime > 1500))
+      {
+        Az_El();
+        buttonState = true;
+        buttonPressTime = millis();
+      }
+      else
+      {
+        buttonState = false;
+      }
+    }
+    if (keyAnalog < 200)
+    {
+      if ((millis() - buttonPressTime > 1500))
+      {
 
-    //azAngle = int(round(azAngleSensor / 2.8));
-    //azAngle = int(round(azAngleSensor / 1024.0 * 360));
+        buttonState = true;
+        buttonPressTime = millis();
+      }
+      else
+      {
+        buttonState = false;
+      }
+    }
+
+    CursorAzEl();
     azAngle = int(round(azAngleSensor / 1020.0 * 360));
-    currentTime = millis();
-    if (currentTime >= (loopTime + 2))
+    if (switchAzEl == 1)
     {
-      azEncoder = digitalRead(PIN_CLK);
-      if ((!azEncoder) && (azEncoderPrev))
+      // AZ
+      currentTime = millis();
+      if (currentTime - (loopTime + 5))
       {
-        if (digitalRead(PIN_DT))
+
+        azEncoder = digitalRead(PIN_CLK);
+
+        if ((!azEncoder) && (azEncoderPrev))
         {
-          if (azTarget + AZ_STEP <= 360)
-            azTarget += AZ_STEP;
+          if (digitalRead(PIN_DT))
+          {
+            if (azTarget + AZ_STEP <= 359)
+              azTarget += AZ_STEP;
+          }
+          else
+          {
+            if (azTarget - AZ_STEP >= 0)
+              azTarget -= AZ_STEP;
+          }
         }
-        else
-        {
-          if (azTarget - AZ_STEP >= 0)
-            azTarget -= AZ_STEP;
-        }
+        azEncoderPrev = azEncoder;
       }
-      azEncoderPrev = azEncoder;
+
+      loopTime = currentTime;
+
+      switch (button())
+      {
+      case 1:
+        azMove = true;
+        if (azTarget >= 100)
+        {
+          strAzTarget = String(azTarget);
+        }
+        if (azTarget < 100)
+        {
+          strAzTarget = " " + String(azTarget);
+        }
+        if (azTarget < 10)
+        {
+          strAzTarget = "  " + String(azTarget);
+        }
+        break;
+      }
     }
 
-    loopTime = currentTime;
-
-    switch (button())
+    if (switchAzEl == 2)
     {
-    case 1:
-      Serial.print("AZ ");
-      Serial.println(azAngle);
-      Serial.print("Target ");
-      Serial.println(azTarget);
-      azMove = true;
-      if (azTarget >= 100)
+      currentTime = millis();
+      if (currentTime >= (loopTime + 5))
       {
-        strAzTarget = String(azTarget);
+        elEncoder = digitalRead(PIN_CLK);
+        if ((!elEncoder) && (elEncoderPrev))
+        {
+          if (digitalRead(PIN_DT))
+          {
+            if (elTarget + EL_STEP <= 90)
+              elTarget += EL_STEP;
+          }
+          else
+          {
+            if (elTarget - EL_STEP >= 0)
+              elTarget -= EL_STEP;
+          }
+        }
+        elEncoderPrev = elEncoder;
       }
-      if (azTarget < 100)
-      {
-        strAzTarget = " " + String(azTarget);
-      }
-      if (azTarget < 10)
-      {
-        strAzTarget = "  " + String(azTarget);
-      }
-      break;
-    case 2:
-      delay(200);
-      clearFlag = true;
-      w = 1;
-      break;
-    }
 
-    lcd.setCursor(4, 0);
-    lcd.print(strAzAngle);
-    lcd.setCursor(4, 1);
-    lcd.print(strAzTarget);
+      loopTime = currentTime;
+
+      switch (button())
+      {
+      case 1:
+        elMove = true;
+        if (elTarget >= 100)
+        {
+          strElTarget = String(elTarget);
+        }
+        if (elTarget < 100)
+        {
+          strElTarget = " " + String(elTarget);
+        }
+        if (elTarget < 10)
+        {
+          strElTarget = "  " + String(elTarget);
+        }
+        break;
+      }
+    }
 
     if (azMove)
     {
       if (azTarget - azAngle >= 1)
       {
-        Serial.print("CW ");
-        Serial.println(azTarget - azAngle);
         if (abs(azTarget - azAngle) > 20)
         {
           speed(true);
@@ -387,8 +457,6 @@ void loop()
 
       if (azAngle - azTarget >= 1)
       {
-        Serial.print("CCW ");
-        Serial.println(azAngle - azTarget);
         if (abs(azAngle - azTarget) > 20)
         {
           speed(true);
@@ -410,213 +478,87 @@ void loop()
       }
     }
 
+    if (elMove)
+    {
+      if (elTarget - elAngle >= 1)
+      {
+        sky();
+      }
+
+      if (elAngle - elTarget >= 1)
+      {
+        ground();
+      }
+
+      if (elTarget == elAngle)
+      {
+        elMove = false;
+        // lcd.setCursor(14, 0);
+        //  lcd.print(" ");
+        // digitalWrite(PIN_TO_SKY, HIGH);
+        // digitalWrite(PIN_TO_GROUND, HIGH);
+      }
+    }
+
+    // Отображение азимута
+    lcd.setCursor(2, 0);
+    lcd.print(strAzAngle);
+    lcd.setCursor(6, 0);
+    lcd.print(strAzTarget);
+
     if (azTarget >= 100)
     {
       strAzTarget = String(azTarget);
     }
+
     if (azTarget < 100)
     {
       strAzTarget = " " + String(azTarget);
     }
+
     if (azTarget < 10)
     {
       strAzTarget = "  " + String(azTarget);
     }
+
     if (azAngle >= 100)
     {
       strAzAngle = String(azAngle);
     }
+
     if (azAngle < 100)
     {
       strAzAngle = " " + String(azAngle);
     }
+
     if (azAngle < 10)
     {
       strAzAngle = "  " + String(azAngle);
     }
-  }
 
-  // Основное меню
-  while (w == 1)
-  {
-    if (clearFlag)
+    // Отображение элевация
+    lcd.setCursor(2, 1);
+    lcd.print(strElAngle);
+    lcd.setCursor(6, 1);
+    lcd.print(strElTarget);
+    if (elTarget < 100)
     {
-      clearDisplay();
-      clearFlag = false;
-      lcd.setCursor(0, 0);
-      lcd.print("CAL   MODE  EXIT");
+      strElTarget = " " + String(elTarget);
     }
 
-    // проверяем положение ручки энкодера
-    encoder.tick();
-    newPos = encoder.getPosition() * STEPS;
-    if (newPos < POSMIN)
+    if (elTarget < 10)
     {
-      encoder.setPosition(POSMIN / STEPS);
-      newPos = POSMIN;
-    }
-    else if (newPos > POSMAX)
-    {
-      encoder.setPosition(POSMAX / STEPS);
-      newPos = POSMAX;
+      strElTarget = "  " + String(elTarget);
     }
 
-    if (lastPos != newPos)
+    if (elAngle < 100)
     {
-      lcd.setCursor(lastPos, 1);
-      lcd.print("    ");
-      lcd.setCursor(newPos, 1);
-      lcd.print("====");
-      lastPos = newPos;
+      strElAngle = " " + String(elAngle);
     }
 
-    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-    if (buttonWasUp && !buttonIsUp)
+    if (elAngle < 10)
     {
-      delay(10);
-      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-      if (!buttonIsUp && newPos == 0)
-      {
-        lcd.clear();
-        delay(500);
-        clearFlag = true;
-        w = 2;
-      }
-      if (!buttonIsUp && newPos == 6)
-      {
-        lcd.clear();
-        delay(500);
-        clearFlag = true;
-        w = 3;
-      }
-      if (!buttonIsUp && newPos == 12)
-      {
-        lcd.clear();
-        delay(500);
-        clearFlag = true;
-        w = 0;
-      }
+      strElAngle = "  " + String(elAngle);
     }
-  }
-
-  // Меню калибровка
-  while (w == 2)
-  {
-    if (clearFlag)
-    {
-      clearDisplay();
-      clearFlag = false;
-      lcd.setCursor(0, 0);
-      lcd.print("ANGL  TURN  EXIT");
-    }
-
-    encoder.tick();
-    newPos = encoder.getPosition() * CAL_STEPS;
-    if (newPos < CAL_POSMIN)
-    {
-      encoder.setPosition(CAL_POSMIN / CAL_STEPS);
-      newPos = CAL_POSMIN;
-    }
-    else if (newPos > CAL_POSMAX)
-    {
-      encoder.setPosition(CAL_POSMAX / CAL_STEPS);
-      newPos = CAL_POSMAX;
-    }
-
-    if (lastPos != newPos)
-    {
-      lcd.setCursor(lastPos, 1);
-      lcd.print("    ");
-      lcd.setCursor(newPos, 1);
-      lcd.print("====");
-      lastPos = newPos;
-    }
-
-    bool buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-    if (buttonWasUp && !buttonIsUp)
-    {
-      delay(10);
-      buttonIsUp = digitalRead(ENC_BUTTON_PIN);
-      if (!buttonIsUp && newPos == 0)
-      {
-        lcd.clear();
-        delay(500);
-        clearFlag = true;
-        w = 21;
-      }
-      if (!buttonIsUp && newPos == 6)
-      {
-        lcd.clear();
-        delay(500);
-        clearFlag = true;
-        w = 22;
-      }
-      if (!buttonIsUp && newPos == 12)
-      {
-        lcd.clear();
-        delay(500);
-        clearFlag = true;
-        w = 23;
-      }
-    }
-  }
-
-  // Меню изменения угла коррекции
-  while (w == 21) {
-        if(clearFlag) {
-          clearDisplay();
-          clearFlag = false;
-          lcd.setCursor(0, 1);
-          lcd.print("ANGLE ");
-        }
-        currentTime = millis();
-        if (currentTime >= (loopTime + 1)) {
-          azCalibrate = digitalRead(PIN_CLK);
-          if ((!azCalibrate) && (azCalibratePrev)) {
-            if (digitalRead(PIN_DT)) {
-              if (calibrate + AZ_STEP <= 360) calibrate += AZ_STEP;
-            }
-            else {
-              if (calibrate - AZ_STEP >= 0) calibrate -= AZ_STEP;
-            }
-          }
-          azCalibratePrev = azCalibrate;
-        }
-        loopTime = currentTime;
-      
-        if (calibrate >= 100) {
-          strAzCal = String(calibrate);
-        }
-        if (calibrate < 100) {
-          strAzCal = " " + String(calibrate);
-        }
-        if (calibrate < 10) {
-          strAzCal = "  " + String(calibrate);
-        }
-
-        lcd.setCursor(6, 1);
-        lcd.print(strAzCal);
-
-        if(button() == 2) {
-           generateAzimuthMap(azAngle, calibrate);
-           delay(1000);
-           clearFlag = true;
-           w = 2;
-        } 
-  }
-
-
-  //Exit
-  while (w == 23)
-  {
-    if (clearFlag)
-    {
-      clearDisplay();
-      clearFlag = false;
-    }
-    lcd.setCursor(1, 0);
-    clearFlag = true;
-    delay(1000);
-    w = 1;
   }
 }
