@@ -382,17 +382,17 @@ void loop()
  
       if ((millis() - buttonPressTime > 1500))
       {
-        if (!azMove)
+        if (azMove != true)
         {
           Serial.println(">>> !azMove");
           Serial.println(azMove);
           appScreen = 1;
         }
 
-        if (!elMove)
-        {
-          appScreen = 1;
-        }
+        // if (!elMove)
+        // {
+        //   appScreen = 1;
+        // }
 
         buttonState = true;
         buttonPressTime = millis();
