@@ -58,7 +58,7 @@ int elTarget = 0;
 int azSensorOffsetBase = 0;
 int azRealOffsetBase = 0;
 int azDelta = 0;
-bool deltaDirection = false;
+byte deltaDirection = 1;
 bool offsetFlag = false;
 byte switchAzEl = 1;
 
@@ -209,68 +209,53 @@ uint8_t button()
 
 
 int azDeltaGen(int sensorAz, int realAz){
-
-if(sensorAz + realAz > 359) {
- return sensorAz + realAz - 359;
-}
-
-if(sensorAz > realAz && sensorAz >= 0) {
-  return sensorAz - realAz;
-}
-
-if(sensorAz < realAz && sensorAz >= 0) {
-  return realAz - sensorAz;
-}
-}
-
-bool azDeltaDirection(int sensorAz,int realAz){
-
-  if (sensorAz < realAz){
-    return true;
+  if (sensorAz == realAz) {
+    deltaDirection = 1;
   }
-  if (sensorAz > realAz){
-    return false;
+
+  if (sensorAz < realAz) {
+    deltaDirection = 3;
+    return abs(realAz - sensorAz);
   }
+
+  if (sensorAz > realAz) {
+    deltaDirection = 2;
+    return 359 - abs(sensorAz - realAz); 
+  }
+
 }
 
-int realAzToSensorAz(int realAz, int delta, bool deltaDirection){
-    if(deltaDirection) {
-    return realAz - delta;
-  } else {
-    if(realAz + delta >= 359){
-      return abs((realAz + delta) - 359);
+int sensorAzToRealAz(int sensorAz, int delta) {
+  if (deltaDirection == 1) {
+    return sensorAz;
+  }
+
+  if (deltaDirection == 2) {
+    if (sensorAz + delta > 359) {
+      return sensorAz + delta - 359;
     }
-
-    return realAz + delta;
-  }
-}
-
-int sensorAzToRealAz(int sensorAz, bool delta, int deltaDirection) {
-  if(deltaDirection) {
-    if(sensorAz + delta > 359) {
-      Serial.println("1");
-        return sensorAz + delta - 359;
-    }
-    
-    if(sensorAz + delta == 0) {
-      Serial.println("2");
+    if(sensorAz + delta > 0) {
       return sensorAz + delta;
     }
+  }
 
-    if(sensorAz + delta > 0 && sensorAz + delta < 359) {
-      Serial.println("3");
-      return sensorAz + delta;
+  if (deltaDirection == 3) {
+    if (sensorAz - delta > 0) {
+      return sensorAz - delta;
     }
-  } else {
-    Serial.println("4");
-     return abs(sensorAz - delta);
+    if (sensorAz - delta < 0) {
+      return 359 - abs(sensorAz - delta);
+    }
+    return sensorAz - delta;
   }
 }
 int offsetFilter(bool offsetFlag, int sensorAz){
   if(offsetFlag) {
-    azDelta = azDeltaGen(sensorAz, offsetAz);
-    deltaDirection = azDeltaDirection(sensorAz, offsetAz);
-    return sensorAzToRealAz(sensorAz, azDelta, deltaDirection);
+   
+    Serial.println(sensorAz);
+    Serial.println(azDelta);
+    Serial.println(deltaDirection);
+    return sensorAzToRealAz(sensorAz, azDelta);
 
   } else {
     return sensorAz;
@@ -691,6 +676,13 @@ offsetSwitchIndicator();
       }
 
       loopTime = currentTime;
+      azDelta = azDeltaGen(azAngle, offsetAz);
+      Serial.print("azAngle: ");
+      Serial.println(azAngle);
+      Serial.print("offsetAz: ");
+      Serial.println(offsetAz);
+      Serial.print("azDelta: ");
+      Serial.println(azDelta);
       // generateAzimuthMap(azAngle, offsetAz);
     }
 
