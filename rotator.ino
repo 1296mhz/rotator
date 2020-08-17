@@ -14,8 +14,7 @@
     192, 168, 1, 41 \
   }
 #define PORT 41234
-#define ANALOG
-#undef ANALOG
+
 #define NETWORK
 
 #define ENC_BUTTON_PIN 4 // the number of the pushbutton encoder pin
@@ -38,18 +37,14 @@ EthernetUDP udp;
 
 // int lastPos, newPos = 180;
 int currentTime, loopTime;
-int azEncoder, azEncoderPrev;
-int elEncoder, elEncoderPrev;
-bool buttonEncoder = false;
-bool buttonEncoderLong = false;
-bool buttonState;
-bool buttonWasUp = true;
+byte azEncoder, azEncoderPrev;
+byte elEncoder, elEncoderPrev;
+
 bool clearFlag = false;
-bool onOffFlag = false;
+
 bool azMove = false;
 bool elMove = false;
 int azimuth_calibration_to[360] = {};
-int buttonPin = 2;
 int offsetAz = 0;
 int offsetEl = 0;
 // Для азимута
@@ -60,8 +55,11 @@ int azAngle = 0;           // Угол азимута
 int azTarget = 180;        // Цель для поворота
 int elAngle = 0;
 int elTarget = 0;
-
-int prevStopFlag;
+int azSensorOffsetBase = 0;
+int azRealOffsetBase = 0;
+int azDelta = 0;
+bool deltaDirection = false;
+bool offsetFlag = false;
 byte switchAzEl = 1;
 
 String strAzAngle;
@@ -73,20 +71,10 @@ String strElTarget;
 String strAzOffset;
 String strElOffset;
 
-byte Heart[8] = {
-    0b00000,
-    0b01010,
-    0b11111,
-    0b11111,
-    0b01110,
-    0b00100,
-    0b00000,
-    0b00000};
-
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Экран 0 - рабочий, 1 - калибровка
-int appScreen = 0;
+byte appScreen = 0;
 bool correctFlag = false;
 uint32_t last_millis;
 // int currentValue, prevValue;
@@ -219,40 +207,95 @@ uint8_t button()
   return 2;
 };
 
-int generateAzimuthMap(int azAngle, int calibrate)
-{
-  for (int x = 0; x < 359 + 1; x++)
-  {
-    if (azAngle + calibrate + x <= 359)
-    {
-      azimuth_calibration_to[x] = azAngle + calibrate + x;
-    }
-    if (calibrate + azAngle + x > 359)
-    {
-      azimuth_calibration_to[x] = abs(359 - (calibrate + azAngle + x));
-    }
-  }
-  return azimuth_calibration_to;
+
+int azDeltaGen(int sensorAz, int realAz){
+
+if(sensorAz + realAz > 359) {
+ return sensorAz + realAz - 359;
 }
 
-int azimuthSubstitutionMap(bool correctFlag, int azAngle, int azimuth_calibration_to)
-{
-  if (correctFlag)
-  {
-    if (sizeof(azimuth_calibration_to) > 0)
-    {
+if(sensorAz > realAz && sensorAz >= 0) {
+  return sensorAz - realAz;
+}
 
-      return azAngle + 5;
-    }
+if(sensorAz < realAz && sensorAz >= 0) {
+  return realAz - sensorAz;
+}
+}
+
+bool azDeltaDirection(int sensorAz,int realAz){
+
+  if (sensorAz < realAz){
+    return true;
   }
-  return azAngle;
+  if (sensorAz > realAz){
+    return false;
+  }
+}
+
+int realAzToSensorAz(int realAz, int delta, bool deltaDirection){
+    if(deltaDirection) {
+    return realAz - delta;
+  } else {
+    if(realAz + delta >= 359){
+      return abs((realAz + delta) - 359);
+    }
+
+    return realAz + delta;
+  }
+}
+
+int sensorAzToRealAz(int sensorAz, bool delta, int deltaDirection) {
+  if(deltaDirection) {
+    if(sensorAz + delta > 359) {
+      Serial.println("1");
+        return sensorAz + delta - 359;
+    }
+    
+    if(sensorAz + delta == 0) {
+      Serial.println("2");
+      return sensorAz + delta;
+    }
+
+    if(sensorAz + delta > 0 && sensorAz + delta < 359) {
+      Serial.println("3");
+      return sensorAz + delta;
+    }
+  } else {
+    Serial.println("4");
+     return abs(sensorAz - delta);
+  }
+}
+int offsetFilter(bool offsetFlag, int sensorAz){
+  if(offsetFlag) {
+    azDelta = azDeltaGen(sensorAz, offsetAz);
+    deltaDirection = azDeltaDirection(sensorAz, offsetAz);
+    return sensorAzToRealAz(sensorAz, azDelta, deltaDirection);
+
+  } else {
+    return sensorAz;
+  }
+}
+void offsetSwitchIndicator()
+{
+  if (offsetFlag)
+  {
+    lcd.setCursor(15, 1);
+    lcd.print("#");
+  }
+  else
+  {
+    lcd.setCursor(15, 1);
+    lcd.print(" ");
+  }
+  lcd.setCursor(15, 0);
+  lcd.print("S");
 }
 
 void setup()
 {
-  lcd.createChar(0, Heart);
-
   speed(true);
+
 #ifdef NETWORK
   uint8_t mac[6] = MAC;
   uint8_t ip[4] = IP;
@@ -263,7 +306,7 @@ void setup()
   lcd.init();
   lcd.backlight();
   lcd.clear();
-  lcd.print("*R8CDF ROTATOR*");
+  // lcd.print("*R8CDF ROTATOR*");
 
   delay(1000);
 
@@ -280,8 +323,7 @@ void setup()
 #ifdef NETWORK
   getNetworkSensor();
 #endif
-  //azAngle = int(round(azAngleSensor / 2.8));
-  azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  azAngle = int(round(azAngleSensor / 1020.0 * 360));
 }
 
 int Az_El()
@@ -345,21 +387,10 @@ void loop()
       lcd.print("E ");
       clearOffset();
     }
-
-    if (azMove)
-    {
-      lcd.setCursor(15, 1);
-      lcd.write(byte(0));
-    }
-    else
-    {
-      lcd.setCursor(15, 1);
-      lcd.print(" ");
-    }
+offsetSwitchIndicator();
 #ifdef NETWORK
     getNetworkSensor();
 #endif
-    boolean buttonState;
     int buttonPressTime;
     int keyAnalog = analogRead(CTRL_KEYS);
     if (keyAnalog < 100)
@@ -368,36 +399,42 @@ void loop()
       {
         Serial.println(keyAnalog);
         Az_El();
-        buttonState = true;
         buttonPressTime = millis();
-      }
-      else
-      {
-        buttonState = false;
       }
     }
 
     if (keyAnalog < 200 && keyAnalog > 100)
     {
-
       if ((millis() - buttonPressTime > 1500))
       {
         if (azMove != true && elMove != true)
         {
           appScreen = 1;
         }
-
-        buttonState = true;
         buttonPressTime = millis();
       }
-      else
+    }
+
+    if (keyAnalog < 400 && keyAnalog > 200)
+    {
+      // Serial.println(keyAnalog);
+      if ((millis() - buttonPressTime > 1500))
       {
-        buttonState = false;
+        if (offsetFlag)
+        {
+          offsetFlag = false;
+        }
+        else
+        {
+          offsetFlag = true;
+        }
+        buttonPressTime = millis();
       }
     }
 
     CursorAzEl();
-    azAngle = int(round(azAngleSensor / 1024.0 * 360));
+    azAngle = int(round(azAngleSensor / 1020.0 * 360));
+
     if (switchAzEl == 1)
     {
       // AZ
@@ -554,35 +591,36 @@ void loop()
     lcd.print(strAzAngle);
     lcd.setCursor(6, 0);
     lcd.print(strAzTarget);
-
-    if (azTarget >= 100)
+    int oAzSens = offsetFilter(offsetFlag, azAngle);
+    int oAzTarget = offsetFilter(offsetFlag, azTarget);
+    if (oAzTarget >= 100)
     {
-      strAzTarget = String(azTarget);
+      strAzTarget = String(oAzTarget);
     }
 
-    if (azTarget < 100)
+    if (oAzTarget < 100)
     {
-      strAzTarget = " " + String(azTarget);
+      strAzTarget = " " + String(oAzTarget);
     }
 
-    if (azTarget < 10)
+    if (oAzTarget < 10)
     {
-      strAzTarget = "  " + String(azTarget);
+      strAzTarget = "  " + String(oAzTarget);
     }
 
-    if (azAngle >= 100)
+    if (oAzSens >= 100)
     {
-      strAzAngle = String(azAngle);
+      strAzAngle = String(oAzSens);
     }
 
-    if (azAngle < 100)
+    if (oAzSens < 100)
     {
-      strAzAngle = " " + String(azAngle);
+      strAzAngle = " " + String(oAzSens);
     }
 
-    if (azAngle < 10)
+    if (oAzSens < 10)
     {
-      strAzAngle = "  " + String(azAngle);
+      strAzAngle = "  " + String(oAzSens);
     }
 
     // Отображение элевация
@@ -614,6 +652,7 @@ void loop()
 
   while (appScreen == 1)
   {
+    offsetSwitchIndicator();
     lcd.setCursor(11, 0);
     lcd.print(offsetAz);
     lcd.setCursor(11, 1);
@@ -630,7 +669,7 @@ void loop()
       lcd.setCursor(10, 0);
       lcd.print("@");
       currentTime = millis();
-      if (currentTime - (loopTime + 5))
+      if (currentTime - (loopTime + 20))
       {
 
         azEncoder = digitalRead(PIN_CLK);
@@ -652,7 +691,7 @@ void loop()
       }
 
       loopTime = currentTime;
-      generateAzimuthMap(azAngle, offsetAz);
+      // generateAzimuthMap(azAngle, offsetAz);
     }
 
     if (switchAzEl == 2)
@@ -660,24 +699,24 @@ void loop()
       lcd.setCursor(10, 1);
       lcd.print("@");
       currentTime = millis();
-      if (currentTime >= (loopTime + 5))
+      //  if (currentTime >= (loopTime + 5))
+      //  {
+      elEncoder = digitalRead(PIN_CLK);
+      if ((!elEncoder) && (elEncoderPrev))
       {
-        elEncoder = digitalRead(PIN_CLK);
-        if ((!elEncoder) && (elEncoderPrev))
+        if (digitalRead(PIN_DT))
         {
-          if (digitalRead(PIN_DT))
-          {
-            if (offsetEl + EL_STEP <= 90)
-              offsetEl += EL_STEP;
-          }
-          else
-          {
-            if (offsetEl - EL_STEP >= 0)
-              offsetEl -= EL_STEP;
-          }
+          if (offsetEl + EL_STEP <= 90)
+            offsetEl += EL_STEP;
         }
-        elEncoderPrev = elEncoder;
+        else
+        {
+          if (offsetEl - EL_STEP >= 0)
+            offsetEl -= EL_STEP;
+        }
       }
+      elEncoderPrev = elEncoder;
+      // }
 
       loopTime = currentTime;
     }
