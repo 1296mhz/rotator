@@ -42,7 +42,7 @@ byte azEncoder, azEncoderPrev;
 byte elEncoder, elEncoderPrev;
 
 bool clearFlag = false;
-
+int buttonPressTime;
 bool azMove = false;
 bool elMove = false;
 int azimuth_calibration_to[360] = {};
@@ -76,6 +76,10 @@ String Elevation = "";
 String ComputerRead;
 String ComputerWrite;
 
+int ComAzim = 0;     // commanded azimuth value
+int ComElev = 0;     // commanded elevation value
+int TruAzim = 0;     // calculated real azimuth value
+int TruElev = 0;     // calculated real elevation value
 byte symbolOffset[8] = {
     0b11001,
     0b10101,
@@ -249,7 +253,6 @@ int azDeltaGen(int sensorAz, int realAz)
     return 359 - abs(sensorAz - realAz) + 1;
   }
 }
-
 int sensorAzToRealAz(int sensorAz, int delta)
 {
   if (deltaDirection == 1)
@@ -309,56 +312,7 @@ void offsetSwitchIndicator()
   lcd.print("S");
 }
 
-void ReadSerial()
-{
-  while (Serial.available())
-  {
-    ComputerRead = Serial.readString(); // read the incoming data as string
-                                        //    Serial.println(ComputerRead);   //if i want to see what is coming via the serial com
-    if ((ComputerRead.charAt(0) == 'A') && (ComputerRead.charAt(1) == 'Z'))
-    {               // if read AZ
-      Azimuth = ""; // initialize Azimuth
-      for (int i = 2; i <= ComputerRead.length(); i++)
-      {
-        if (ComputerRead.charAt(i) == ' ')
-        { // if pause detected, see if read EL
-          if ((ComputerRead.charAt(i + 1) == 'E') && (ComputerRead.charAt(i + 2) == 'L'))
-          {
-            Elevation = ""; // initialize Elevation
-            for (int j = i + 3; j <= ComputerRead.length(); j++)
-            {
-              if (ComputerRead.charAt(j) == ' ')
-              {
-                break;
-              }
-              Elevation = Elevation + ComputerRead.charAt(j);
-            }
-            break; // exit
-          }
-          break;
-        }
-        Azimuth = Azimuth + ComputerRead.charAt(i);
-      }
-    }
-    ComAzim = Azimuth.toInt();
-    ComElev = Elevation.toInt();
-    // keeping comand between limits
-    ComAzim = (ComAzim + 360) % 360;
-    if (ComElev < 0)
-    {
-      ComElev = 0;
-    }
-    if (ComElev > 90)
-    {
-      ComElev = 90;
-    }
-    // set the encoder values, not to jerk the antenna
-    AzEncoderPos = ComAzim;
-    ElEncoderPos = ComElev;
-    ComputerWrite = "ANTAZ" + String(TruAzim) + " ANTEL" + String(TruElev);
-    Serial.println(ComputerWrite);
-  }
-}
+
 
 void setup()
 {
@@ -483,16 +437,22 @@ void loop()
       clearOffset();
     }
     offsetSwitchIndicator();
+    // ReadSerial();
+    if(Serial.available()){
+         ComputerRead = Serial.readString();
+
+        lcd.setCursor(0, 1);
+        lcd.print(ComputerRead);
+    }
 #ifdef NETWORK
     getNetworkSensor();
 #endif
-    int buttonPressTime;
+    
     int keyAnalog = analogRead(CTRL_KEYS);
     if (keyAnalog < 100)
     {
       if ((millis() - buttonPressTime > 1500))
       {
-        Serial.println(keyAnalog);
         Az_El();
         buttonPressTime = millis();
       }
@@ -729,30 +689,30 @@ void loop()
     }
 
     // Отображение элевация
-    lcd.setCursor(2, 1);
-    lcd.print(strElAngle);
-    lcd.setCursor(6, 1);
-    lcd.print(strElTarget);
+    // lcd.setCursor(2, 1);
+    // lcd.print(strElAngle);
+    // lcd.setCursor(6, 1);
+    // lcd.print(strElTarget);
 
-    if (elTarget < 100)
-    {
-      strElTarget = " " + String(elTarget);
-    }
+    // if (elTarget < 100)
+    // {
+    //   strElTarget = " " + String(elTarget);
+    // }
 
-    if (elTarget < 10)
-    {
-      strElTarget = "  " + String(elTarget);
-    }
+    // if (elTarget < 10)
+    // {
+    //   strElTarget = "  " + String(elTarget);
+    // }
 
-    if (elAngle < 100)
-    {
-      strElAngle = " " + String(elAngle);
-    }
+    // if (elAngle < 100)
+    // {
+    //   strElAngle = " " + String(elAngle);
+    // }
 
-    if (elAngle < 10)
-    {
-      strElAngle = "  " + String(elAngle);
-    }
+    // if (elAngle < 10)
+    // {
+    //   strElAngle = "  " + String(elAngle);
+    // }
   }
 
   while (appScreen == 1)
@@ -874,4 +834,71 @@ void loop()
       strElOffset = "  " + String(offsetEl);
     }
   }
+
+  // while (appScreen == 2)
+  // {
+  //   if (clearFlag)
+  //   {
+  //     clearDisplay();
+  //     clearFlag = false;
+  //     getSpeed();
+  //     clearOffset();
+  //   }
+
+  // while (Serial.available())
+  // {
+  //   int keyAnalog = analogRead(CTRL_KEYS);
+  //   if (keyAnalog < 100)
+  //   {
+  //     if ((millis() - buttonPressTime > 1500))
+  //     {
+  //       // Az_El();
+  //       appScreen = 1;
+  //       buttonPressTime = millis();
+  //     }
+  //   }
+  //   ComputerRead = Serial.readString(); // read the incoming data as string
+  //                                       //    Serial.println(ComputerRead);   //if i want to see what is coming via the serial com
+  //   if ((ComputerRead.charAt(0) == 'A') && (ComputerRead.charAt(1) == 'Z'))
+  //   {               // if read AZ
+  //     Azimuth = ""; // initialize Azimuth
+  //     for (int i = 2; i <= ComputerRead.length(); i++)
+  //     {
+  //       if (ComputerRead.charAt(i) == ' ')
+  //       { // if pause detected, see if read EL
+  //         if ((ComputerRead.charAt(i + 1) == 'E') && (ComputerRead.charAt(i + 2) == 'L'))
+  //         {
+  //           Elevation = ""; // initialize Elevation
+  //           for (int j = i + 3; j <= ComputerRead.length(); j++)
+  //           {
+  //             if (ComputerRead.charAt(j) == ' ')
+  //             {
+  //               break;
+  //             }
+  //             Elevation = Elevation + ComputerRead.charAt(j);
+  //           }
+  //           break; // exit
+  //         }
+  //         break;
+  //       }
+  //       Azimuth = Azimuth + ComputerRead.charAt(i);
+  //     }
+  //   }
+  //   ComAzim = Azimuth.toInt();
+  //   ComElev = Elevation.toInt();
+  //   // keeping comand between limits
+  //   ComAzim = (ComAzim + 360) % 360;
+  //   if (ComElev < 0)
+  //   {
+  //     ComElev = 0;
+  //   }
+  //   if (ComElev > 90)
+  //   {
+  //     ComElev = 90;
+  //   }
+
+  //   ComputerWrite = "ANTAZ" + String(ComAzim) + " ANTEL" + String(ComElev);
+  //   Serial.println(ComputerWrite);
+  // }
+  // }
 }
