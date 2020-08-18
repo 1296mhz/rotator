@@ -230,7 +230,7 @@ int azDeltaGen(int sensorAz, int realAz)
   if (sensorAz > realAz)
   {
     deltaDirection = 2;
-    return 359 - abs(sensorAz - realAz);
+    return 359 - abs(sensorAz - realAz) + 1;
   }
 }
 
@@ -245,7 +245,7 @@ int sensorAzToRealAz(int sensorAz, int delta)
   {
     if (sensorAz + delta > 359)
     {
-      return sensorAz + delta - 359;
+      return (sensorAz + delta - 359) - 1;
     }
     if (sensorAz + delta > 0)
     {
@@ -318,7 +318,7 @@ void setup()
   lcd.init();
   lcd.backlight();
   lcd.clear();
-  // lcd.print("*R8CDF ROTATOR*");
+  lcd.print("*R8CDF ROTATOR*");
 
   delay(1000);
 
@@ -337,16 +337,21 @@ void setup()
   deltaDirection = newSettingsStruct.deltaDirection;
   azDelta = newSettingsStruct.azDelta;
   offsetAz = newSettingsStruct.offsetAz;
+
+  Serial.print("Restore offsetFlag: ");
   Serial.println(newSettingsStruct.offsetFlag);
+  Serial.print("Restore deltaDirection: ");
   Serial.println(newSettingsStruct.deltaDirection);
+  Serial.print("Restore azDelta: ");
   Serial.println(newSettingsStruct.azDelta);
+  Serial.print("Restore offsetAz: ");
   Serial.println(newSettingsStruct.offsetAz);
   //dataB_read = 380;
   //eeprom_update_word(0, dataB_read);
 #ifdef NETWORK
   getNetworkSensor();
 #endif
-  azAngle = int(round(azAngleSensor / 1020.0 * 360));
+  azAngle = int(round(azAngleSensor / 1024.0 * 360));
 }
 
 int Az_El()
@@ -471,7 +476,7 @@ void loop()
     }
 
     CursorAzEl();
-    int _azAngle = int(round(azAngleSensor / 1020.0 * 360));
+    int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
     azAngle = offsetFilter(offsetFlag, _azAngle);
 
     if (switchAzEl == 1)
