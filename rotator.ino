@@ -445,7 +445,6 @@ void loop()
 
     if (keyAnalog < 400 && keyAnalog > 200)
     {
-      // Serial.println(keyAnalog);
       if ((millis() - buttonPressTime > 1500))
       {
         if (offsetFlag)
@@ -456,8 +455,6 @@ void loop()
             newSettingsStruct.offsetFlag = false;
             eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
             eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-
-            Serial.println(newSettingsStruct.offsetFlag);
           }
         }
         else
@@ -468,7 +465,6 @@ void loop()
             newSettingsStruct.offsetFlag = true;
             eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
             eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-            Serial.println(newSettingsStruct.offsetFlag);
           }
         }
         buttonPressTime = millis();
@@ -483,8 +479,7 @@ void loop()
     {
       // AZ
       currentTime = millis();
-      // if (currentTime >= (loopTime + 5))
-      if (currentTime - loopTime > 15)
+       if (currentTime >= (loopTime + 15))
       {
         azEncoder = digitalRead(PIN_CLK);
         int encoder_B = digitalRead(PIN_DT);
@@ -713,13 +708,13 @@ void loop()
       }
       eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
       eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-      Serial.print("offsetFlag: ");
+      Serial.print("Saved offsetFlag: ");
       Serial.println(newSettingsStruct.offsetFlag);
-      Serial.print("deltaDirection: ");
+      Serial.print("Saved deltaDirection: ");
       Serial.println(newSettingsStruct.deltaDirection);
-      Serial.print("azDelta: ");
+      Serial.print("Saved azDelta: ");
       Serial.println(newSettingsStruct.azDelta);
-      Serial.print("offsetAz: ");
+      Serial.print("Saved offsetAz: ");
       Serial.println(newSettingsStruct.offsetAz);
       clearFlag = true;
       appScreen = 0;
@@ -779,7 +774,6 @@ void loop()
         }
         elEncoderPrev = elEncoder;
       }
-
       loopTime = currentTime;
     }
 
@@ -800,7 +794,7 @@ void loop()
 
     if (offsetAz < 10)
     {
-      strAzOffset = String(offsetAz);
+      strAzOffset =  "  " + String(offsetAz);
     }
 
     if (offsetEl < 100)
