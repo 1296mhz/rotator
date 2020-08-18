@@ -416,8 +416,9 @@ offsetSwitchIndicator();
     }
 
     CursorAzEl();
-    azAngle = int(round(azAngleSensor / 1020.0 * 360));
-
+    int _azAngle = int(round(azAngleSensor / 1020.0 * 360));
+    azAngle = offsetFilter(offsetFlag, _azAngle);
+    
     if (switchAzEl == 1)
     {
       // AZ
@@ -574,37 +575,36 @@ offsetSwitchIndicator();
     lcd.print(strAzAngle);
     lcd.setCursor(6, 0);
     lcd.print(strAzTarget);
-    int oAzSens = offsetFilter(offsetFlag, azAngle);
-    int oAzTarget = offsetFilter(offsetFlag, azTarget);
+
     // Отображение цели
-    if (oAzTarget >= 100)
+    if (azTarget >= 100)
     {
-      strAzTarget = String(oAzTarget);
+      strAzTarget = String(azTarget);
     }
 
-    if (oAzTarget < 100)
+    if (azTarget < 100)
     {
-      strAzTarget = " " + String(oAzTarget);
+      strAzTarget = " " + String(azTarget);
     }
 
-    if (oAzTarget < 10)
+    if (azTarget < 10)
     {
-      strAzTarget = "  " + String(oAzTarget);
+      strAzTarget = "  " + String(azTarget);
     }
     // Отображение данных с датчика
-    if (oAzSens >= 100)
+    if (azAngle >= 100)
     {
-      strAzAngle = String(oAzSens);
+      strAzAngle = String(azAngle);
     }
 
-    if (oAzSens < 100)
+    if (azAngle < 100)
     {
-      strAzAngle = " " + String(oAzSens);
+      strAzAngle = " " + String(azAngle);
     }
 
-    if (oAzSens < 10)
+    if (azAngle < 10)
     {
-      strAzAngle = "  " + String(oAzSens);
+      strAzAngle = "  " + String(azAngle);
     }
 
     // Отображение элевация
@@ -653,14 +653,14 @@ offsetSwitchIndicator();
       lcd.setCursor(10, 0);
       lcd.print("@");
       currentTime = millis();
-      if (currentTime - (loopTime + 20))
+      if (currentTime - (loopTime + 5))
       {
 
         azEncoder = digitalRead(PIN_CLK);
-
+        int pinDt = digitalRead(PIN_DT);
         if ((!azEncoder) && (azEncoderPrev))
-        {
-          if (digitalRead(PIN_DT))
+        {;
+          if (pinDt)
           {
             if (offsetAz + AZ_STEP <= 359)
               offsetAz += AZ_STEP;
@@ -690,8 +690,8 @@ offsetSwitchIndicator();
       lcd.setCursor(10, 1);
       lcd.print("@");
       currentTime = millis();
-      //  if (currentTime >= (loopTime + 5))
-      //  {
+        if (currentTime >= (loopTime + 5))
+        {
       elEncoder = digitalRead(PIN_CLK);
       if ((!elEncoder) && (elEncoderPrev))
       {
@@ -707,7 +707,7 @@ offsetSwitchIndicator();
         }
       }
       elEncoderPrev = elEncoder;
-      // }
+       }
 
       loopTime = currentTime;
     }
