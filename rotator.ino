@@ -69,7 +69,23 @@ String strElTarget;
 String strAzOffset;
 String strElOffset;
 uint16_t dataB_read = 0;
-// объявляем структуру
+
+// variables for serial comm
+String Azimuth = "";
+String Elevation = "";
+String ComputerRead;
+String ComputerWrite;
+
+byte symbolOffset[8] = {
+    0b11001,
+    0b10101,
+    0b11001,
+    0b10001,
+    0b10001,
+    0b10011,
+    0b10101,
+    0b10011};
+
 struct SettingsStruct
 {
   bool offsetFlag;
@@ -282,7 +298,7 @@ void offsetSwitchIndicator()
   if (offsetFlag)
   {
     lcd.setCursor(15, 1);
-    lcd.print("#");
+    lcd.print(char(1));
   }
   else
   {
@@ -291,6 +307,57 @@ void offsetSwitchIndicator()
   }
   lcd.setCursor(15, 0);
   lcd.print("S");
+}
+
+void ReadSerial()
+{
+  while (Serial.available())
+  {
+    ComputerRead = Serial.readString(); // read the incoming data as string
+                                        //    Serial.println(ComputerRead);   //if i want to see what is coming via the serial com
+    if ((ComputerRead.charAt(0) == 'A') && (ComputerRead.charAt(1) == 'Z'))
+    {               // if read AZ
+      Azimuth = ""; // initialize Azimuth
+      for (int i = 2; i <= ComputerRead.length(); i++)
+      {
+        if (ComputerRead.charAt(i) == ' ')
+        { // if pause detected, see if read EL
+          if ((ComputerRead.charAt(i + 1) == 'E') && (ComputerRead.charAt(i + 2) == 'L'))
+          {
+            Elevation = ""; // initialize Elevation
+            for (int j = i + 3; j <= ComputerRead.length(); j++)
+            {
+              if (ComputerRead.charAt(j) == ' ')
+              {
+                break;
+              }
+              Elevation = Elevation + ComputerRead.charAt(j);
+            }
+            break; // exit
+          }
+          break;
+        }
+        Azimuth = Azimuth + ComputerRead.charAt(i);
+      }
+    }
+    ComAzim = Azimuth.toInt();
+    ComElev = Elevation.toInt();
+    // keeping comand between limits
+    ComAzim = (ComAzim + 360) % 360;
+    if (ComElev < 0)
+    {
+      ComElev = 0;
+    }
+    if (ComElev > 90)
+    {
+      ComElev = 90;
+    }
+    // set the encoder values, not to jerk the antenna
+    AzEncoderPos = ComAzim;
+    ElEncoderPos = ComElev;
+    ComputerWrite = "ANTAZ" + String(TruAzim) + " ANTEL" + String(TruElev);
+    Serial.println(ComputerWrite);
+  }
 }
 
 void setup()
@@ -319,7 +386,7 @@ void setup()
   lcd.backlight();
   lcd.clear();
   lcd.print("*R8CDF ROTATOR*");
-
+  lcd.createChar(1, symbolOffset);
   delay(1000);
 
   lcd.clear();
@@ -479,7 +546,7 @@ void loop()
     {
       // AZ
       currentTime = millis();
-       if (currentTime >= (loopTime + 15))
+      if (currentTime >= (loopTime + 15))
       {
         azEncoder = digitalRead(PIN_CLK);
         int encoder_B = digitalRead(PIN_DT);
@@ -794,7 +861,7 @@ void loop()
 
     if (offsetAz < 10)
     {
-      strAzOffset =  "  " + String(offsetAz);
+      strAzOffset = "  " + String(offsetAz);
     }
 
     if (offsetEl < 100)
