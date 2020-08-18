@@ -60,15 +60,6 @@ int azDelta = 0;
 byte deltaDirection = 1;
 bool offsetFlag = false;
 byte switchAzEl = 1;
-
-// Variables to debounce Rotary Encoder
-long TimeOfLastDebounce = 0;
-int DelayofDebounce = 0.01;
-int pinALast;
-// Store previous Pins state
-int PreviousCLK;
-int PreviousDATA;
-
 String strAzAngle;
 String strAzTarget;
 
@@ -77,7 +68,16 @@ String strElTarget;
 
 String strAzOffset;
 String strElOffset;
-
+uint16_t dataB_read = 0;
+// объявляем структуру
+struct SettingsStruct
+{
+  bool offsetFlag;
+  byte deltaDirection;
+  int azDelta;
+  int offsetAz;
+};
+SettingsStruct newSettingsStruct;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Экран 0 - рабочий, 1 - калибровка
@@ -270,10 +270,6 @@ int offsetFilter(bool offsetFlag, int sensorAz)
 {
   if (offsetFlag)
   {
-
-    Serial.println(sensorAz);
-    Serial.println(azDelta);
-    Serial.println(deltaDirection);
     return sensorAzToRealAz(sensorAz, azDelta);
   }
   else
@@ -300,6 +296,17 @@ void offsetSwitchIndicator()
 void setup()
 {
   speed(true);
+  //Magic number 137
+  if (eeprom_read_byte(1023) != 137)
+  {
+    SettingsStruct settingsStruct;
+    settingsStruct.offsetFlag = false;
+    settingsStruct.deltaDirection = 1;
+    settingsStruct.azDelta = 0;
+    settingsStruct.offsetAz = 0;
+    eeprom_write_block((void *)&settingsStruct, 0, sizeof(settingsStruct));
+    eeprom_write_byte(1023, 137);
+  }
 
 #ifdef NETWORK
   uint8_t mac[6] = MAC;
@@ -324,9 +331,18 @@ void setup()
   pinMode(PIN_CW, OUTPUT);
   pinMode(PIN_SPEED, OUTPUT);
   last_millis = millis();
-  PreviousCLK = digitalRead(PIN_CLK);
-  PreviousDATA = digitalRead(PIN_DT);
 
+  eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+  offsetFlag = newSettingsStruct.offsetFlag;
+  deltaDirection = newSettingsStruct.deltaDirection;
+  azDelta = newSettingsStruct.azDelta;
+  offsetAz = newSettingsStruct.offsetAz;
+  Serial.println(newSettingsStruct.offsetFlag);
+  Serial.println(newSettingsStruct.deltaDirection);
+  Serial.println(newSettingsStruct.azDelta);
+  Serial.println(newSettingsStruct.offsetAz);
+  //dataB_read = 380;
+  //eeprom_update_word(0, dataB_read);
 #ifdef NETWORK
   getNetworkSensor();
 #endif
@@ -430,10 +446,25 @@ void loop()
         if (offsetFlag)
         {
           offsetFlag = false;
+          if (newSettingsStruct.offsetFlag != false)
+          {
+            newSettingsStruct.offsetFlag = false;
+            eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+            eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+
+            Serial.println(newSettingsStruct.offsetFlag);
+          }
         }
         else
         {
           offsetFlag = true;
+          if (newSettingsStruct.offsetFlag != true)
+          {
+            newSettingsStruct.offsetFlag = true;
+            eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+            eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+            Serial.println(newSettingsStruct.offsetFlag);
+          }
         }
         buttonPressTime = millis();
       }
@@ -446,10 +477,10 @@ void loop()
     if (switchAzEl == 1)
     {
       // AZ
-       currentTime = millis();
+      currentTime = millis();
       // if (currentTime >= (loopTime + 5))
       if (currentTime - loopTime > 15)
-       {
+      {
         azEncoder = digitalRead(PIN_CLK);
         int encoder_B = digitalRead(PIN_DT);
         if ((!azEncoder) && (azEncoderPrev))
@@ -466,292 +497,315 @@ void loop()
           }
         }
         azEncoderPrev = azEncoder;
-       }
-       loopTime = currentTime;
-    
-    switch (button())
-    {
-    case 1:
-      azMove = true;
-      if (azTarget >= 100)
-      {
-        strAzTarget = String(azTarget);
       }
-      if (azTarget < 100)
-      {
-        strAzTarget = " " + String(azTarget);
-      }
-      if (azTarget < 10)
-      {
-        strAzTarget = "  " + String(azTarget);
-      }
-      break;
-    }
-  }
+      loopTime = currentTime;
 
-  if (switchAzEl == 2)
-  {
-    currentTime = millis();
-    if (currentTime >= (loopTime + 5))
-    {
-      elEncoder = digitalRead(PIN_CLK);
-      if ((!elEncoder) && (elEncoderPrev))
+      switch (button())
       {
-        if (digitalRead(PIN_DT))
+      case 1:
+        azMove = true;
+        if (azTarget >= 100)
         {
-          if (elTarget + EL_STEP <= 90)
-            elTarget += EL_STEP;
+          strAzTarget = String(azTarget);
         }
-        else
+        if (azTarget < 100)
         {
-          if (elTarget - EL_STEP >= 0)
-            elTarget -= EL_STEP;
+          strAzTarget = " " + String(azTarget);
         }
-      }
-      elEncoderPrev = elEncoder;
-    }
-
-    loopTime = currentTime;
-
-    switch (button())
-    {
-    case 1:
-      elMove = true;
-      if (elTarget >= 100)
-      {
-        strElTarget = String(elTarget);
-      }
-      if (elTarget < 100)
-      {
-        strElTarget = " " + String(elTarget);
-      }
-      if (elTarget < 10)
-      {
-        strElTarget = "  " + String(elTarget);
-      }
-      break;
-    }
-  }
-
-  if (azMove)
-  {
-    if (azTarget - azAngle >= 1)
-    {
-      if (abs(azTarget - azAngle) > 20)
-      {
-        speed(true);
-      }
-      if (abs(azTarget - azAngle) < 20)
-      {
-        speed(false);
-      }
-      cw();
-    }
-
-    if (azAngle - azTarget >= 1)
-    {
-      if (abs(azAngle - azTarget) > 20)
-      {
-        speed(true);
-      }
-      if (abs(azAngle - azTarget) < 20)
-      {
-        speed(false);
-      }
-      ccw();
-    }
-
-    if (azTarget == azAngle)
-    {
-      azMove = false;
-      lcd.setCursor(14, 0);
-      lcd.print(" ");
-      digitalWrite(PIN_CW, HIGH);
-      digitalWrite(PIN_CCW, HIGH);
-    }
-  }
-
-  if (elMove)
-  {
-    if (elTarget - elAngle >= 1)
-    {
-      sky();
-    }
-
-    if (elAngle - elTarget >= 1)
-    {
-      ground();
-    }
-
-    if (elTarget == elAngle)
-    {
-      elMove = false;
-      // lcd.setCursor(14, 0);
-      //  lcd.print(" ");
-      // digitalWrite(PIN_TO_SKY, HIGH);
-      // digitalWrite(PIN_TO_GROUND, HIGH);
-    }
-  }
-
-  // Отображение азимута
-  lcd.setCursor(2, 0);
-  lcd.print(strAzAngle);
-  lcd.setCursor(6, 0);
-  lcd.print(strAzTarget);
-
-  // Отображение цели
-  if (azTarget >= 100)
-  {
-    strAzTarget = String(azTarget);
-  }
-
-  if (azTarget < 100)
-  {
-    strAzTarget = " " + String(azTarget);
-  }
-
-  if (azTarget < 10)
-  {
-    strAzTarget = "  " + String(azTarget);
-  }
-  // Отображение данных с датчика
-  if (azAngle >= 100)
-  {
-    strAzAngle = String(azAngle);
-  }
-
-  if (azAngle < 100)
-  {
-    strAzAngle = " " + String(azAngle);
-  }
-
-  if (azAngle < 10)
-  {
-    strAzAngle = "  " + String(azAngle);
-  }
-
-  // Отображение элевация
-  lcd.setCursor(2, 1);
-  lcd.print(strElAngle);
-  lcd.setCursor(6, 1);
-  lcd.print(strElTarget);
-
-  if (elTarget < 100)
-  {
-    strElTarget = " " + String(elTarget);
-  }
-
-  if (elTarget < 10)
-  {
-    strElTarget = "  " + String(elTarget);
-  }
-
-  if (elAngle < 100)
-  {
-    strElAngle = " " + String(elAngle);
-  }
-
-  if (elAngle < 10)
-  {
-    strElAngle = "  " + String(elAngle);
-  }
-}
-
-while (appScreen == 1)
-{
-  offsetSwitchIndicator();
-  if (button() == 1)
-  {
-    clearFlag = true;
-    appScreen = 0;
-  }
-
-  if (switchAzEl == 1)
-  {
-    lcd.setCursor(10, 0);
-    lcd.print("@");
-    currentTime = millis();
-    if (currentTime - (loopTime + 5))
-    {
-
-      azEncoder = digitalRead(PIN_CLK);
-      int pinDt = digitalRead(PIN_DT);
-      if ((!azEncoder) && (azEncoderPrev))
-      {
-        ;
-        if (pinDt)
+        if (azTarget < 10)
         {
-          if (offsetAz + AZ_STEP <= 359)
-            offsetAz += AZ_STEP;
+          strAzTarget = "  " + String(azTarget);
         }
-        else
-        {
-          if (offsetAz - AZ_STEP >= 0)
-            offsetAz -= AZ_STEP;
-        }
+        break;
       }
-      azEncoderPrev = azEncoder;
     }
 
-    loopTime = currentTime;
-    azDelta = azDeltaGen(azAngle, offsetAz);
-  }
-
-  if (switchAzEl == 2)
-  {
-    lcd.setCursor(10, 1);
-    lcd.print("@");
-    currentTime = millis();
-    if (currentTime >= (loopTime + 5))
+    if (switchAzEl == 2)
     {
-      elEncoder = digitalRead(PIN_CLK);
-      if ((!elEncoder) && (elEncoderPrev))
+      currentTime = millis();
+      if (currentTime >= (loopTime + 5))
       {
-        if (digitalRead(PIN_DT))
+        elEncoder = digitalRead(PIN_CLK);
+        if ((!elEncoder) && (elEncoderPrev))
         {
-          if (offsetEl + EL_STEP <= 90)
-            offsetEl += EL_STEP;
+          if (digitalRead(PIN_DT))
+          {
+            if (elTarget + EL_STEP <= 90)
+              elTarget += EL_STEP;
+          }
+          else
+          {
+            if (elTarget - EL_STEP >= 0)
+              elTarget -= EL_STEP;
+          }
         }
-        else
-        {
-          if (offsetEl - EL_STEP >= 0)
-            offsetEl -= EL_STEP;
-        }
+        elEncoderPrev = elEncoder;
       }
-      elEncoderPrev = elEncoder;
+
+      loopTime = currentTime;
+
+      switch (button())
+      {
+      case 1:
+        elMove = true;
+        if (elTarget >= 100)
+        {
+          strElTarget = String(elTarget);
+        }
+        if (elTarget < 100)
+        {
+          strElTarget = " " + String(elTarget);
+        }
+        if (elTarget < 10)
+        {
+          strElTarget = "  " + String(elTarget);
+        }
+        break;
+      }
     }
 
-    loopTime = currentTime;
+    if (azMove)
+    {
+      if (azTarget - azAngle >= 1)
+      {
+        if (abs(azTarget - azAngle) > 20)
+        {
+          speed(true);
+        }
+        if (abs(azTarget - azAngle) < 20)
+        {
+          speed(false);
+        }
+        cw();
+      }
+
+      if (azAngle - azTarget >= 1)
+      {
+        if (abs(azAngle - azTarget) > 20)
+        {
+          speed(true);
+        }
+        if (abs(azAngle - azTarget) < 20)
+        {
+          speed(false);
+        }
+        ccw();
+      }
+
+      if (azTarget == azAngle)
+      {
+        azMove = false;
+        lcd.setCursor(14, 0);
+        lcd.print(" ");
+        digitalWrite(PIN_CW, HIGH);
+        digitalWrite(PIN_CCW, HIGH);
+      }
+    }
+
+    if (elMove)
+    {
+      if (elTarget - elAngle >= 1)
+      {
+        sky();
+      }
+
+      if (elAngle - elTarget >= 1)
+      {
+        ground();
+      }
+
+      if (elTarget == elAngle)
+      {
+        elMove = false;
+        // lcd.setCursor(14, 0);
+        //  lcd.print(" ");
+        // digitalWrite(PIN_TO_SKY, HIGH);
+        // digitalWrite(PIN_TO_GROUND, HIGH);
+      }
+    }
+
+    // Отображение азимута
+    lcd.setCursor(2, 0);
+    lcd.print(strAzAngle);
+    lcd.setCursor(6, 0);
+    lcd.print(strAzTarget);
+
+    // Отображение цели
+    if (azTarget >= 100)
+    {
+      strAzTarget = String(azTarget);
+    }
+
+    if (azTarget < 100)
+    {
+      strAzTarget = " " + String(azTarget);
+    }
+
+    if (azTarget < 10)
+    {
+      strAzTarget = "  " + String(azTarget);
+    }
+    // Отображение данных с датчика
+    if (azAngle >= 100)
+    {
+      strAzAngle = String(azAngle);
+    }
+
+    if (azAngle < 100)
+    {
+      strAzAngle = " " + String(azAngle);
+    }
+
+    if (azAngle < 10)
+    {
+      strAzAngle = "  " + String(azAngle);
+    }
+
+    // Отображение элевация
+    lcd.setCursor(2, 1);
+    lcd.print(strElAngle);
+    lcd.setCursor(6, 1);
+    lcd.print(strElTarget);
+
+    if (elTarget < 100)
+    {
+      strElTarget = " " + String(elTarget);
+    }
+
+    if (elTarget < 10)
+    {
+      strElTarget = "  " + String(elTarget);
+    }
+
+    if (elAngle < 100)
+    {
+      strElAngle = " " + String(elAngle);
+    }
+
+    if (elAngle < 10)
+    {
+      strElAngle = "  " + String(elAngle);
+    }
   }
 
-  lcd.setCursor(11, 0);
-  lcd.print(offsetAz);
-  lcd.setCursor(11, 1);
-  lcd.print(offsetEl);
-
-  if (offsetAz >= 100)
+  while (appScreen == 1)
   {
-    strAzOffset = String(offsetAz);
-  }
+    offsetSwitchIndicator();
+    if (button() == 1)
+    {
+      if (newSettingsStruct.deltaDirection != deltaDirection)
+      {
+        newSettingsStruct.deltaDirection = deltaDirection;
+      }
+      if (newSettingsStruct.azDelta != azDelta)
+      {
+        newSettingsStruct.azDelta = azDelta;
+      }
 
-  if (offsetAz < 100)
-  {
-    strAzOffset = " " + String(offsetAz);
-  }
+      if (newSettingsStruct.offsetAz != offsetAz)
+      {
+        newSettingsStruct.offsetAz = offsetAz;
+      }
+      eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+      eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+      Serial.print("offsetFlag: ");
+      Serial.println(newSettingsStruct.offsetFlag);
+      Serial.print("deltaDirection: ");
+      Serial.println(newSettingsStruct.deltaDirection);
+      Serial.print("azDelta: ");
+      Serial.println(newSettingsStruct.azDelta);
+      Serial.print("offsetAz: ");
+      Serial.println(newSettingsStruct.offsetAz);
+      clearFlag = true;
+      appScreen = 0;
+    }
 
-  if (offsetAz < 10)
-  {
-    strAzOffset = String(offsetAz);
-  }
+    if (switchAzEl == 1)
+    {
+      lcd.setCursor(10, 0);
+      lcd.print("@");
+      currentTime = millis();
+      if (currentTime - (loopTime + 5))
+      {
 
-  if (offsetEl < 100)
-  {
-    strElOffset = " " + String(offsetEl);
-  }
+        azEncoder = digitalRead(PIN_CLK);
+        int pinDt = digitalRead(PIN_DT);
+        if ((!azEncoder) && (azEncoderPrev))
+        {
+          ;
+          if (pinDt)
+          {
+            if (offsetAz + AZ_STEP <= 359)
+              offsetAz += AZ_STEP;
+          }
+          else
+          {
+            if (offsetAz - AZ_STEP >= 0)
+              offsetAz -= AZ_STEP;
+          }
+        }
+        azEncoderPrev = azEncoder;
+      }
 
-  if (offsetEl < 10)
-  {
-    strElOffset = "  " + String(offsetEl);
+      loopTime = currentTime;
+      azDelta = azDeltaGen(azAngle, offsetAz);
+    }
+
+    if (switchAzEl == 2)
+    {
+      lcd.setCursor(10, 1);
+      lcd.print("@");
+      currentTime = millis();
+      if (currentTime >= (loopTime + 5))
+      {
+        elEncoder = digitalRead(PIN_CLK);
+        if ((!elEncoder) && (elEncoderPrev))
+        {
+          if (digitalRead(PIN_DT))
+          {
+            if (offsetEl + EL_STEP <= 90)
+              offsetEl += EL_STEP;
+          }
+          else
+          {
+            if (offsetEl - EL_STEP >= 0)
+              offsetEl -= EL_STEP;
+          }
+        }
+        elEncoderPrev = elEncoder;
+      }
+
+      loopTime = currentTime;
+    }
+
+    lcd.setCursor(11, 0);
+    lcd.print(offsetAz);
+    lcd.setCursor(11, 1);
+    lcd.print(offsetEl);
+
+    if (offsetAz >= 100)
+    {
+      strAzOffset = String(offsetAz);
+    }
+
+    if (offsetAz < 100)
+    {
+      strAzOffset = " " + String(offsetAz);
+    }
+
+    if (offsetAz < 10)
+    {
+      strAzOffset = String(offsetAz);
+    }
+
+    if (offsetEl < 100)
+    {
+      strElOffset = " " + String(offsetEl);
+    }
+
+    if (offsetEl < 10)
+    {
+      strElOffset = "  " + String(offsetEl);
+    }
   }
-}
 }
