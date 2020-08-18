@@ -576,6 +576,7 @@ offsetSwitchIndicator();
     lcd.print(strAzTarget);
     int oAzSens = offsetFilter(offsetFlag, azAngle);
     int oAzTarget = offsetFilter(offsetFlag, azTarget);
+    // Отображение цели
     if (oAzTarget >= 100)
     {
       strAzTarget = String(oAzTarget);
@@ -590,7 +591,7 @@ offsetSwitchIndicator();
     {
       strAzTarget = "  " + String(oAzTarget);
     }
-
+    // Отображение данных с датчика
     if (oAzSens >= 100)
     {
       strAzAngle = String(oAzSens);
