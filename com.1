@@ -1,0 +1,466 @@
+  // while (appScreen == 2)
+  // {
+  //   if (clearFlag)
+  //   {
+  //     clearDisplay();
+  //     clearFlag = false;
+  //     getSpeed();
+  //     clearOffset();
+  //   }
+
+  // while (Serial.available())
+  // {
+  //   int keyAnalog = analogRead(CTRL_KEYS);
+  //   if (keyAnalog < 100)
+  //   {
+  //     if ((millis() - buttonPressTime > 1500))
+  //     {
+  //       // Az_El();
+  //       appScreen = 1;
+  //       buttonPressTime = millis();
+  //     }
+  //   }
+  //   ComputerRead = Serial.readString(); // read the incoming data as string
+  //                                       //    Serial.println(ComputerRead);   //if i want to see what is coming via the serial com
+  //   if ((ComputerRead.charAt(0) == 'A') && (ComputerRead.charAt(1) == 'Z'))
+  //   {               // if read AZ
+  //     Azimuth = ""; // initialize Azimuth
+  //     for (int i = 2; i <= ComputerRead.length(); i++)
+  //     {
+  //       if (ComputerRead.charAt(i) == ' ')
+  //       { // if pause detected, see if read EL
+  //         if ((ComputerRead.charAt(i + 1) == 'E') && (ComputerRead.charAt(i + 2) == 'L'))
+  //         {
+  //           Elevation = ""; // initialize Elevation
+  //           for (int j = i + 3; j <= ComputerRead.length(); j++)
+  //           {
+  //             if (ComputerRead.charAt(j) == ' ')
+  //             {
+  //               break;
+  //             }
+  //             Elevation = Elevation + ComputerRead.charAt(j);
+  //           }
+  //           break; // exit
+  //         }
+  //         break;
+  //       }
+  //       Azimuth = Azimuth + ComputerRead.charAt(i);
+  //     }
+  //   }
+  //   ComAzim = Azimuth.toInt();
+  //   ComElev = Elevation.toInt();
+  //   // keeping comand between limits
+  //   ComAzim = (ComAzim + 360) % 360;
+  //   if (ComElev < 0)
+  //   {
+  //     ComElev = 0;
+  //   }
+  //   if (ComElev > 90)
+  //   {
+  //     ComElev = 90;
+  //   }
+
+  //   ComputerWrite = "ANTAZ" + String(ComAzim) + " ANTEL" + String(ComElev);
+  //   Serial.println(ComputerWrite);
+  // }
+  // }
+
+  if (keyAnalog < 100)
+  {
+    if ((millis() - buttonPressTime > 1500))
+    {
+      Az_El();
+      buttonPressTime = millis();
+    }
+  }
+
+  if (keyAnalog < 200 && keyAnalog > 100)
+  {
+    if ((millis() - buttonPressTime > 1500))
+    {
+      if (azMove != true && elMove != true)
+      {
+        Serial.println("Change app screen ");
+        int app = AppScreen();
+        Serial.println(app);
+      }
+      buttonPressTime = millis();
+    }
+  }
+
+  if (keyAnalog < 400 && keyAnalog > 200)
+  {
+    if ((millis() - buttonPressTime > 1500))
+    {
+      if (offsetFlag)
+      {
+        offsetFlag = false;
+        if (newSettingsStruct.offsetFlag != false)
+        {
+          newSettingsStruct.offsetFlag = false;
+          eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+          eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+        }
+      }
+      else
+      {
+        offsetFlag = true;
+        if (newSettingsStruct.offsetFlag != true)
+        {
+          newSettingsStruct.offsetFlag = true;
+          eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+          eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+        }
+      }
+      buttonPressTime = millis();
+    }
+  }
+
+  if (appScreen == 0)
+  {
+
+    if (clearFlag)
+    {
+      clearDisplay();
+      clearFlag = false;
+      getSpeed();
+      lcd.setCursor(0, 0);
+      lcd.print("A ");
+      lcd.setCursor(0, 1);
+      lcd.print("E ");
+      clearOffset();
+      Serial.println("App screen 0");
+    }
+    offsetSwitchIndicator();
+  }
+  if (appScreen == 1)
+  {
+    if (clearFlag)
+    {
+      clearDisplay();
+      clearFlag = false;
+      getSpeed();
+      clearOffset();
+      Serial.println("App screen 1");
+    }
+    offsetSwitchIndicator();
+    // ReadSerial();
+    if (Serial.available())
+    {
+      ComputerRead = Serial.readString();
+
+      lcd.setCursor(0, 1);
+      //  lcd.print(ComputerRead);
+    }
+  }
+  if (appScreen == 2)
+
+  int keyAnalog = analogRead(CTRL_KEYS);
+  if (keyAnalog < 100)
+  {
+    if ((millis() - buttonPressTime > 1500))
+    {
+      Az_El();
+      buttonPressTime = millis();
+    }
+  }
+
+  if (keyAnalog < 200 && keyAnalog > 100)
+  {
+    if ((millis() - buttonPressTime > 1500))
+    {
+      if (azMove != true && elMove != true)
+      {
+        Serial.println("Change app screen ");
+        int app = AppScreen();
+        Serial.println(app);
+      }
+      buttonPressTime = millis();
+    }
+  }
+
+  if (keyAnalog < 400 && keyAnalog > 200)
+  {
+    if ((millis() - buttonPressTime > 1500))
+    {
+      if (offsetFlag)
+      {
+        offsetFlag = false;
+        if (newSettingsStruct.offsetFlag != false)
+        {
+          newSettingsStruct.offsetFlag = false;
+          eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+          eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+        }
+      }
+      else
+      {
+        offsetFlag = true;
+        if (newSettingsStruct.offsetFlag != true)
+        {
+          newSettingsStruct.offsetFlag = true;
+          eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+          eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+        }
+      }
+      buttonPressTime = millis();
+    }
+  }
+    if (appScreen == 0)
+  {
+
+    if (clearFlag)
+    {
+      clearDisplay();
+      clearFlag = false;
+      getSpeed();
+      lcd.setCursor(0, 0);
+      lcd.print("A ");
+      lcd.setCursor(0, 1);
+      lcd.print("E ");
+      clearOffset();
+      Serial.println("App screen 0");
+    }
+    offsetSwitchIndicator();
+
+#ifdef NETWORK
+    getNetworkSensor();
+#endif
+
+    CursorAzEl();
+    int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
+    azAngle = offsetFilter(offsetFlag, _azAngle);
+
+    if (switchAzEl == 1)
+    {
+      // AZ
+      currentTime = millis();
+      if (currentTime >= (loopTime + 15))
+      {
+        azEncoder = digitalRead(PIN_CLK);
+        int encoder_B = digitalRead(PIN_DT);
+        if ((!azEncoder) && (azEncoderPrev))
+        {
+          if (encoder_B)
+          {
+            if (azTarget + AZ_STEP <= 359)
+              azTarget += AZ_STEP;
+          }
+          else
+          {
+            if (azTarget - AZ_STEP >= 0)
+              azTarget -= AZ_STEP;
+          }
+        }
+        azEncoderPrev = azEncoder;
+      }
+      loopTime = currentTime;
+
+      switch (button())
+      {
+      case 1:
+        azMove = true;
+        if (azTarget >= 100)
+        {
+          strAzTarget = String(azTarget);
+        }
+        if (azTarget < 100)
+        {
+          strAzTarget = " " + String(azTarget);
+        }
+        if (azTarget < 10)
+        {
+          strAzTarget = "  " + String(azTarget);
+        }
+        break;
+      }
+    }
+
+    if (switchAzEl == 2)
+    {
+      currentTime = millis();
+      if (currentTime >= (loopTime + 5))
+      {
+        elEncoder = digitalRead(PIN_CLK);
+        if ((!elEncoder) && (elEncoderPrev))
+        {
+          if (digitalRead(PIN_DT))
+          {
+            if (elTarget + EL_STEP <= 90)
+              elTarget += EL_STEP;
+          }
+          else
+          {
+            if (elTarget - EL_STEP >= 0)
+              elTarget -= EL_STEP;
+          }
+        }
+        elEncoderPrev = elEncoder;
+      }
+
+      loopTime = currentTime;
+
+      switch (button())
+      {
+      case 1:
+        elMove = true;
+        if (elTarget >= 100)
+        {
+          strElTarget = String(elTarget);
+        }
+        if (elTarget < 100)
+        {
+          strElTarget = " " + String(elTarget);
+        }
+        if (elTarget < 10)
+        {
+          strElTarget = "  " + String(elTarget);
+        }
+        break;
+      }
+    }
+
+    if (azMove)
+    {
+      if (azTarget - azAngle >= 1)
+      {
+        if (abs(azTarget - azAngle) > 20)
+        {
+          speed(true);
+        }
+        if (abs(azTarget - azAngle) < 20)
+        {
+          speed(false);
+        }
+        cw();
+      }
+
+      if (azAngle - azTarget >= 1)
+      {
+        if (abs(azAngle - azTarget) > 20)
+        {
+          speed(true);
+        }
+        if (abs(azAngle - azTarget) < 20)
+        {
+          speed(false);
+        }
+        ccw();
+      }
+
+      if (azTarget == azAngle)
+      {
+        azMove = false;
+        lcd.setCursor(14, 0);
+        lcd.print(" ");
+        digitalWrite(PIN_CW, HIGH);
+        digitalWrite(PIN_CCW, HIGH);
+      }
+    }
+
+    if (elMove)
+    {
+      if (elTarget - elAngle >= 1)
+      {
+        sky();
+      }
+
+      if (elAngle - elTarget >= 1)
+      {
+        ground();
+      }
+
+      if (elTarget == elAngle)
+      {
+        elMove = false;
+        // lcd.setCursor(14, 0);
+        //  lcd.print(" ");
+        // digitalWrite(PIN_TO_SKY, HIGH);
+        // digitalWrite(PIN_TO_GROUND, HIGH);
+      }
+    }
+
+    // Отображение азимута
+    lcd.setCursor(2, 0);
+    lcd.print(strAzAngle);
+    lcd.setCursor(6, 0);
+    lcd.print(strAzTarget);
+
+    // Отображение цели
+    if (azTarget >= 100)
+    {
+      strAzTarget = String(azTarget);
+    }
+
+    if (azTarget < 100)
+    {
+      strAzTarget = " " + String(azTarget);
+    }
+
+    if (azTarget < 10)
+    {
+      strAzTarget = "  " + String(azTarget);
+    }
+    // Отображение данных с датчика
+    if (azAngle >= 100)
+    {
+      strAzAngle = String(azAngle);
+    }
+
+    if (azAngle < 100)
+    {
+      strAzAngle = " " + String(azAngle);
+    }
+
+    if (azAngle < 10)
+    {
+      strAzAngle = "  " + String(azAngle);
+    }
+
+    // Отображение элевация
+    // lcd.setCursor(2, 1);
+    // lcd.print(strElAngle);
+    // lcd.setCursor(6, 1);
+    // lcd.print(strElTarget);
+
+    // if (elTarget < 100)
+    // {
+    //   strElTarget = " " + String(elTarget);
+    // }
+
+    // if (elTarget < 10)
+    // {
+    //   strElTarget = "  " + String(elTarget);
+    // }
+
+    // if (elAngle < 100)
+    // {
+    //   strElAngle = " " + String(elAngle);
+    // }
+
+    // if (elAngle < 10)
+    // {
+    //   strElAngle = "  " + String(elAngle);
+    // }
+  }
+  if (appScreen == 1)
+  {
+    if (clearFlag)
+    {
+      clearDisplay();
+      clearFlag = false;
+      getSpeed();
+      clearOffset();
+      Serial.println("App screen 1");
+    }
+    offsetSwitchIndicator();
+    // ReadSerial();
+    if (Serial.available())
+    {
+      ComputerRead = Serial.readString();
+
+      lcd.setCursor(0, 1);
+      //  lcd.print(ComputerRead);
+    }
+  }
+  if (appScreen == 2)
