@@ -511,13 +511,11 @@ String AzElString(uint16_t someIntVolue, bool el)
   {
     return " " + String(someIntVolue);
   }
- // if (!el)
- // {
-    if (someIntVolue >= 100)
-    {
-      return String(someIntVolue);
-    }
- //}
+
+  if (someIntVolue >= 100 && !el)
+  {
+    return String(someIntVolue);
+  }
 }
 
 //TGT, STEP, AZ/AL - true/false
@@ -840,29 +838,32 @@ void loop()
     lcd.setCursor(6, 0);
     lcd.print(strAzTargetPort);
 
-    if (elAngle < 100)
-    {
-      strElAngle = " " + String(elAngle);
-    }
+    strElAngle = AzElString(elAngle, true);
+    // if (elAngle < 100)
+    // {
+    //   strElAngle = " " + String(elAngle);
+    // }
 
-    if (elAngle < 10)
-    {
-      strElAngle = "  " + String(elAngle);
-    }
+    // if (elAngle < 10)
+    // {
+    //   strElAngle = "  " + String(elAngle);
+    // }
 
     // Отображение элевация
     lcd.setCursor(11, 1);
     lcd.print(strElAngle);
 
-    if (elTargetPort < 100)
-    {
-      strElTargetPort = " " + String(elTargetPort);
-    }
+    strElTargetPort = AzElString(elTargetPort, true);
 
-    if (elTargetPort < 10)
-    {
-      strElTargetPort = "  " + String(elTargetPort);
-    }
+    // if (elTargetPort < 100)
+    // {
+    //   strElTargetPort = " " + String(elTargetPort);
+    // }
+
+    // if (elTargetPort < 10)
+    // {
+    //   strElTargetPort = "  " + String(elTargetPort);
+    // }
     lcd.setCursor(11, 0);
     lcd.print(strElTargetPort);
   }
@@ -904,7 +905,7 @@ void loop()
       {
         newSettingsStruct.deltaDirectionEl = deltaDirectionEl;
       }
-      
+
       if (newSettingsStruct.azDelta != azDelta)
       {
         newSettingsStruct.azDelta = azDelta;
