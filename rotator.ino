@@ -90,8 +90,10 @@ String strElTargetPort; // Цель для перемещения
 String strAzOffset;
 String strElOffset;
 
-int azTargetPort = 0;
-int elTargetPort = 0;
+//Секция для работы с com-портом
+String PortRead;
+int azPortTarget = 0;
+int elPortTarget = 0;
 
 struct SettingsStruct
 {
@@ -502,6 +504,10 @@ void screenManualPort()
 
 String AzElString(int someIntVolue, bool el)
 {
+  if (someIntVolue < 0)
+  {
+    return "" + String(someIntVolue);
+  }
   if (someIntVolue < 10)
   {
     return "  " + String(someIntVolue);
@@ -619,6 +625,7 @@ void loop()
     {
       clearDisplay();
       clearFlag = false;
+      getSpeed();
       screenManualPort();
       lcd.setCursor(0, 0);
       lcd.print(" MAN");
@@ -788,7 +795,7 @@ void loop()
     {
       clearDisplay();
       clearFlag = false;
-      getSpeed();
+      //getSpeed();
       screenManualPort();
       lcd.setCursor(0, 0);
       lcd.print("PORT");
@@ -812,6 +819,84 @@ void loop()
     }
     offsetSwitchIndicator();
 
+    if (Serial.available())
+    {
+
+      PortRead = Serial.readString();
+      int buffer_len = PortRead.length() + 1;
+      char port_char_array[buffer_len];
+      char az[7], el[7];
+
+      sscanf(PortRead.c_str(), "%s %s", &az, &el);
+      azPortTarget = int(round(atof(az)));
+      elPortTarget = int(round(atof(el)));
+    }
+    // && elPortTarget >= 0 && elPortTarget <= 90
+    if(azPortTarget) {
+      azMove = true;
+    //  elMove = true;
+    }
+
+    if (azMove)
+    {
+      if (azPortTarget - azAngle >= 1)
+      {
+        if (abs(azPortTarget - azAngle) > 20)
+        {
+          speed(true);
+        }
+        if (abs(azPortTarget - azAngle) < 20)
+        {
+          speed(false);
+        }
+        cw();
+      }
+
+      if (azAngle - azPortTarget >= 1)
+      {
+        if (abs(azAngle - azPortTarget) > 20)
+        {
+          speed(true);
+        }
+        if (abs(azAngle - azPortTarget) < 20)
+        {
+          speed(false);
+        }
+        ccw();
+      }
+
+      if (azPortTarget == azAngle)
+      {
+        azMove = false;
+        lcd.setCursor(14, 0);
+        lcd.print(" ");
+        digitalWrite(PIN_CW, HIGH);
+        digitalWrite(PIN_CCW, HIGH);
+      }
+    }
+
+    if (elMove)
+    {
+      if (elPortTarget - elAngle >= 1)
+      {
+        sky();
+      }
+
+      if (elPortTarget - elTarget >= 1)
+      {
+        ground();
+      }
+
+      if (elPortTarget == elAngle)
+      {
+        elMove = false;
+        // lcd.setCursor(14, 0);
+        //  lcd.print(" ");
+        // digitalWrite(PIN_TO_SKY, HIGH);
+        // digitalWrite(PIN_TO_GROUND, HIGH);
+      }
+    }
+
     // Отображение данных с датчика
     strAzAngle = AzElString(azAngle, false);
 
@@ -820,7 +905,7 @@ void loop()
     lcd.print(strAzAngle);
 
     // Отображение цели
-    strAzTargetPort = AzElString(azTargetPort, false);
+    strAzTargetPort = AzElString(azPortTarget, false);
 
     lcd.setCursor(6, 0);
     lcd.print(strAzTargetPort);
@@ -831,7 +916,7 @@ void loop()
     lcd.setCursor(11, 1);
     lcd.print(strElAngle);
 
-    strElTargetPort = AzElString(elTargetPort, true);
+    strElTargetPort = AzElString(elPortTarget, true);
 
     lcd.setCursor(11, 0);
     lcd.print(strElTargetPort);
