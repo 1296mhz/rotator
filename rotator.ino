@@ -769,29 +769,13 @@ void loop()
     lcd.setCursor(11, 1);
     lcd.print(strElAngle);
 
-    if (elAngle < 100)
-    {
-      strElAngle = " " + String(elAngle);
-    }
-
-    if (elAngle < 10)
-    {
-      strElAngle = "  " + String(elAngle);
-    }
+    strAzTarget = AzElString(elAngle, true);
 
     // Отображение цели элевации
     lcd.setCursor(11, 0);
     lcd.print(strElTarget);
 
-    if (elTarget < 100)
-    {
-      strElTarget = " " + String(elTarget);
-    }
-
-    if (elTarget < 10)
-    {
-      strElTarget = "  " + String(elTarget);
-    }
+    strAzTarget = AzElString(elTarget, true);
   }
 
   //PC
