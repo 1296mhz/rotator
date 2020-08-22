@@ -830,11 +830,16 @@ void loop()
       sscanf(PortRead.c_str(), "%s %s", &az, &el);
       azPortTarget = int(round(atof(az)));
       elPortTarget = int(round(atof(el)));
-    }
-    // && elPortTarget >= 0 && elPortTarget <= 90
-    if(azPortTarget) {
-      azMove = true;
-    //  elMove = true;
+
+      if (azPortTarget >= 0 && azPortTarget <= 359)
+      {
+        azMove = true;
+      }
+
+      if (elPortTarget >= 0 && elPortTarget <= 90)
+      {
+        elMove = true;
+      }
     }
 
     if (azMove)
