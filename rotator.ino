@@ -41,7 +41,7 @@ EthernetUDP udp;
 uint16_t currentTime, loopTime;
 byte encoder, encoderPrev;
 // byte elEncoder, elEncoderPrev;
-uint8_t buttonPressTime = 0;
+int buttonPressTime = 0;
 
 //Флаг очистки эерана на каждом скрине
 bool clearFlag = false;
@@ -50,22 +50,25 @@ bool clearFlag = false;
 bool azMove = false;
 // Флаг для включения вращения по элевации
 bool elMove = false;
-//Флаг включения смещения
-bool offsetFlag = false;
-// Хранение смещения для азимута
-uint16_t offsetAz = 0;
-// Хранение смещения для элевации
-uint16_t offsetEl = 0;
 
 // Для азимута
 float azAngleSensor = 0.0; // С сенcора угла азимута
-float elAngleSensor = 0.0; // С сенcора угла элевации
 
-uint16_t azAngle = 0;    // Угол азимута
-uint16_t azTarget = 180; // Цель для поворота
-uint16_t elAngle = 0;
-uint16_t elTarget = 0;
-uint16_t azDelta = 0;
+//Флаг включения смещения
+bool offsetFlag = false;
+// Хранение смещения для азимута
+int offsetAz = 0;
+int azAngle = 0;    // Угол азимута
+int azTarget = 180; // Цель для поворота
+int azDelta = 0;
+
+float elAngleSensor = 0.0; // С сенcора угла элевации
+// Хранение смещения для элевации
+int offsetEl = 0;
+int elAngle = 0;
+int elTarget = 0;
+int elDelta = 0;
+
 byte deltaDirection = 1;
 //Флаг переключение азимут/элевация
 byte switchAzEl = 1;
@@ -493,9 +496,9 @@ void screenManualPort()
 
 String AzElString(uint16_t someIntVolue)
 {
-  if (someIntVolue >= 100)
+  if (someIntVolue < 10)
   {
-    return String(someIntVolue);
+    return "  " + String(someIntVolue);
   }
 
   if (someIntVolue < 100)
@@ -503,65 +506,38 @@ String AzElString(uint16_t someIntVolue)
     return " " + String(someIntVolue);
   }
 
-  if (someIntVolue < 10)
+  if (someIntVolue >= 100)
   {
-    return "  " + String(someIntVolue);
+    return String(someIntVolue);
   }
 }
 
 //TGT, STEP, AZ/AL - true/false
-int MoveEncoder(int * tgt, byte STEP ){
+int RotateEncoder(int *tgt, byte STEP, bool az_el)
+{
 
-      
-      currentTime = millis();
-      if (currentTime >= (loopTime + 15))
+  currentTime = millis();
+  if (currentTime >= (loopTime + 15))
+  {
+    encoder = digitalRead(PIN_CLK);
+    if ((!encoder) && (encoderPrev))
+    {
+      if (digitalRead(PIN_DT))
       {
-        encoder = digitalRead(PIN_CLK);
-        if ((!encoder) && (encoderPrev))
-        {
-          if (digitalRead(PIN_DT))
-          {
-            if (*tgt + AZ_STEP <= 359)
-            //Serial.println(*tgt += AZ_STEP);
-              *tgt += AZ_STEP;
-          }
-          else
-          {
-            if (*tgt - AZ_STEP >= 0)
-             //Serial.println(*tgt -= AZ_STEP);
-              *tgt -= AZ_STEP;
-          }
-        }
-        encoderPrev = encoder;
+        if (*tgt + STEP <= az_el ? 359 : 90)
+          *tgt += STEP;
       }
+      else
+      {
+        if (*tgt - STEP >= 0)
+          *tgt -= STEP;
+      }
+    }
+    encoderPrev = encoder;
+  }
 
-      loopTime = currentTime;
+  loopTime = currentTime;
 }
-
-// void RotateEncoder()
-// {
-//   currentTime = millis();
-//   if (currentTime >= (loopTime + 15))
-//   {
-//     encoder = digitalRead(PIN_CLK);
-//     int encoder_B = digitalRead(PIN_DT);
-//     if ((!encoder) && (encoderPrev))
-//     {
-//       if (encoder_B)
-//       {
-//         if (azTarget + AZ_STEP <= 359)
-//           azTarget += AZ_STEP;
-//       }
-//       else
-//       {
-//         if (azTarget - AZ_STEP >= 0)
-//           azTarget -= AZ_STEP;
-//       }
-//     }
-//     encoderPrev = encoder;
-//   }
-//   loopTime = currentTime;
-// }
 
 void setup()
 {
@@ -613,7 +589,8 @@ void setup()
 #ifdef NETWORK
   getNetworkSensor();
 #endif
-  azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  azAngle = offsetFilter(offsetFlag, _azAngle);
 }
 
 void loop()
@@ -623,17 +600,20 @@ void loop()
 #endif
   int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
   azAngle = offsetFilter(offsetFlag, _azAngle);
+  int _elAngle = 0;
+  
+  // MANUAL
   if (appScreen == 0)
   {
     if (clearFlag)
     {
       clearDisplay();
       clearFlag = false;
-
       screenManualPort();
       lcd.setCursor(0, 0);
       lcd.print(" MAN");
     }
+
     switch (buttonMode())
     {
     case 1:
@@ -652,30 +632,8 @@ void loop()
     offsetSwitchIndicator();
     if (switchAzEl == 1)
     {
-      // AZ
-      // currentTime = millis();
-      // if (currentTime >= (loopTime + 15))
-      // {
-      //   encoder = digitalRead(PIN_CLK);
-      //   int encoder_B = digitalRead(PIN_DT);
-      //   if ((!encoder) && (encoderPrev))
-      //   {
-      //     if (encoder_B)
-      //     {
-      //       if (azTarget + AZ_STEP <= 359)
-      //         azTarget += AZ_STEP;
-      //     }
-      //     else
-      //     {
-      //       if (azTarget - AZ_STEP >= 0)
-      //         azTarget -= AZ_STEP;
-      //     }
-      //   }
-      //   encoderPrev = encoder;
-      // }
-      // loopTime = currentTime;
-      //RotateEncoder();
-      MoveEncoder(&azTarget, AZ_STEP);
+
+      RotateEncoder(&azTarget, AZ_STEP, true);
       switch (buttonEnc())
       {
       case 1:
@@ -824,8 +782,10 @@ void loop()
     {
       strElTarget = "  " + String(elTarget);
     }
+
   }
 
+  //PC
   if (appScreen == 1)
   {
     if (clearFlag)
@@ -896,6 +856,7 @@ void loop()
     lcd.print(strElTargetPort);
   }
 
+  //SETTINGS
   if (appScreen == 2)
   {
 
@@ -952,68 +913,35 @@ void loop()
 
     if (switchAzEl == 1)
     {
-      // AZ
-      currentTime = millis();
-      if (currentTime >= (loopTime + 15))
-      {
-        encoder = digitalRead(PIN_CLK);
-        int encoder_B = digitalRead(PIN_DT);
-        if ((!encoder) && (encoderPrev))
-        {
-          if (encoder_B)
-          {
-            if (offsetAz + AZ_STEP <= 359)
-              offsetAz += AZ_STEP;
-          }
-          else
-          {
-            if (offsetAz - AZ_STEP >= 0)
-              offsetAz -= AZ_STEP;
-          }
-        }
-        encoderPrev = encoder;
-      }
-      loopTime = currentTime;
+      RotateEncoder(&offsetAz, AZ_STEP, true);
+      azDelta = azDeltaGen(_azAngle, offsetAz);
     }
-
-    azDelta = azDeltaGen(_azAngle, offsetAz);
 
     if (switchAzEl == 2)
     {
-      currentTime = millis();
-      if (currentTime >= (loopTime + 15))
-      {
-        encoder = digitalRead(PIN_CLK);
-        if ((!encoder) && (encoderPrev))
-        {
-          if (digitalRead(PIN_DT))
-          {
-            if (offsetEl + EL_STEP <= 90)
-              offsetEl += EL_STEP;
-          }
-          else
-          {
-            if (offsetEl - EL_STEP >= 0)
-              offsetEl -= EL_STEP;
-          }
-        }
-        encoderPrev = encoder;
-      }
-
-      loopTime = currentTime;
+      RotateEncoder(&offsetEl, EL_STEP, false);
     }
 
-    // Отображение данных с датчика
+    // Отображение данных с датчика азимута
     strAzAngle = AzElString(_azAngle);
-
+    strAzOffset = AzElString(offsetAz);
     // Отображение азимута
     lcd.setCursor(8, 0);
     lcd.print(strAzAngle);
 
-    // Отображение цели
-    strAzOffset = AzElString(offsetAz);
-
     lcd.setCursor(12, 0);
     lcd.print(strAzOffset);
+
+    // Отображение данных с датчика азимута
+    strElAngle = AzElString(_elAngle);
+    // Отображение смещения элевации
+    strElOffset = AzElString(offsetEl);
+
+    // Отображение элевации
+    lcd.setCursor(8, 1);
+    lcd.print(strElAngle);
+
+    lcd.setCursor(12, 1);
+    lcd.print(strElOffset);
   }
 }
