@@ -500,7 +500,7 @@ void screenManualPort()
   lcd.print(" ANT A    E");
 }
 
-String AzElString(uint16_t someIntVolue, bool el)
+String AzElString(int someIntVolue, bool el)
 {
   if (someIntVolue < 10)
   {
@@ -512,7 +512,7 @@ String AzElString(uint16_t someIntVolue, bool el)
     return " " + String(someIntVolue);
   }
 
-  if (someIntVolue >= 100 && !el)
+  if (someIntVolue >= 100)
   {
     return String(someIntVolue);
   }
@@ -627,7 +627,10 @@ void loop()
     switch (buttonMode())
     {
     case 1:
-      AppScreen();
+      if (azMove != true && elMove != true)
+      {
+        AppScreen();
+      }
       break;
     }
 
@@ -769,13 +772,13 @@ void loop()
     lcd.setCursor(11, 1);
     lcd.print(strElAngle);
 
-    strAzTarget = AzElString(elAngle, true);
+    strElAngle = AzElString(elAngle, true);
 
     // Отображение цели элевации
     lcd.setCursor(11, 0);
     lcd.print(strElTarget);
 
-    strAzTarget = AzElString(elTarget, true);
+    strElTarget = AzElString(elTarget, true);
   }
 
   //PC
