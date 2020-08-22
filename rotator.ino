@@ -68,8 +68,9 @@ int offsetEl = 0;
 int elAngle = 0;
 int elTarget = 0;
 int elDelta = 0;
-
-byte deltaDirection = 1;
+int _elAngle = 0;
+byte deltaDirectionAz = 1;
+byte deltaDirectionEl = 1;
 //Флаг переключение азимут/элевация
 byte switchAzEl = 1;
 
@@ -95,9 +96,12 @@ int elTargetPort = 0;
 struct SettingsStruct
 {
   bool offsetFlag;
-  byte deltaDirection;
+  byte deltaDirectionAz;
   int azDelta;
   int offsetAz;
+  byte deltaDirectionEl;
+  int offsetEl;
+  int elDelta;
 };
 SettingsStruct newSettingsStruct;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -195,6 +199,7 @@ void sky()
 {
   // dummy func
   Serial.println("To sky");
+  delay(500);
   elAngle++;
 }
 
@@ -202,6 +207,7 @@ void ground()
 {
   // dummy func
   Serial.println("To ground");
+  delay(500);
   elAngle--;
 }
 
@@ -284,30 +290,30 @@ int azDeltaGen(int sensorAz, int realAz)
 {
   if (sensorAz == realAz)
   {
-    deltaDirection = 1;
+    deltaDirectionAz = 1;
   }
 
   if (sensorAz < realAz)
   {
-    deltaDirection = 3;
+    deltaDirectionAz = 3;
     return abs(realAz - sensorAz);
   }
 
   if (sensorAz > realAz)
   {
-    deltaDirection = 2;
+    deltaDirectionAz = 2;
     return 359 - abs(sensorAz - realAz) + 1;
   }
 }
 
 int sensorAzToRealAz(int sensorAz, int delta)
 {
-  if (deltaDirection == 1)
+  if (deltaDirectionAz == 1)
   {
     return sensorAz;
   }
 
-  if (deltaDirection == 2)
+  if (deltaDirectionAz == 2)
   {
     if (sensorAz + delta > 359)
     {
@@ -319,7 +325,7 @@ int sensorAzToRealAz(int sensorAz, int delta)
     }
   }
 
-  if (deltaDirection == 3)
+  if (deltaDirectionAz == 3)
   {
     if (sensorAz - delta > 0)
     {
@@ -494,7 +500,7 @@ void screenManualPort()
   lcd.print(" ANT A    E");
 }
 
-String AzElString(uint16_t someIntVolue)
+String AzElString(uint16_t someIntVolue, bool el)
 {
   if (someIntVolue < 10)
   {
@@ -505,11 +511,13 @@ String AzElString(uint16_t someIntVolue)
   {
     return " " + String(someIntVolue);
   }
-
-  if (someIntVolue >= 100)
-  {
-    return String(someIntVolue);
-  }
+ // if (!el)
+ // {
+    if (someIntVolue >= 100)
+    {
+      return String(someIntVolue);
+    }
+ //}
 }
 
 //TGT, STEP, AZ/AL - true/false
@@ -547,9 +555,12 @@ void setup()
   {
     SettingsStruct settingsStruct;
     settingsStruct.offsetFlag = false;
-    settingsStruct.deltaDirection = 1;
+    settingsStruct.deltaDirectionAz = 1;
     settingsStruct.azDelta = 0;
     settingsStruct.offsetAz = 0;
+    settingsStruct.deltaDirectionEl = 1;
+    settingsStruct.elDelta = 0;
+    settingsStruct.offsetEl = 0;
     eeprom_write_block((void *)&settingsStruct, 0, sizeof(settingsStruct));
     eeprom_write_byte(1023, 137);
   }
@@ -567,7 +578,6 @@ void setup()
   // lcd.print("*R8CDF*");
 
   delay(1000);
-
   lcd.clear();
   clearFlag = true;
   pinMode(PIN_CLK, INPUT_PULLUP);
@@ -582,10 +592,13 @@ void setup()
 
   eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
   offsetFlag = newSettingsStruct.offsetFlag;
-  deltaDirection = newSettingsStruct.deltaDirection;
+  deltaDirectionAz = newSettingsStruct.deltaDirectionAz;
   azDelta = newSettingsStruct.azDelta;
   offsetAz = newSettingsStruct.offsetAz;
-
+  deltaDirectionEl = newSettingsStruct.deltaDirectionEl;
+  elDelta = newSettingsStruct.elDelta;
+  offsetEl = newSettingsStruct.offsetEl;
+  int _elAngle = 0;
 #ifdef NETWORK
   getNetworkSensor();
 #endif
@@ -600,8 +613,7 @@ void loop()
 #endif
   int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
   azAngle = offsetFilter(offsetFlag, _azAngle);
-  int _elAngle = 0;
-  
+
   // MANUAL
   if (appScreen == 0)
   {
@@ -638,7 +650,7 @@ void loop()
       {
       case 1:
         azMove = true;
-        strAzTarget = AzElString(azTarget);
+        strAzTarget = AzElString(azTarget, false);
         break;
       case 2:
         Az_El();
@@ -674,7 +686,7 @@ void loop()
       {
       case 1:
         elMove = true;
-        strElTarget = AzElString(elTarget);
+        strElTarget = AzElString(elTarget, true);
         break;
       case 2:
         Az_El();
@@ -750,10 +762,10 @@ void loop()
     lcd.print(strAzTarget);
 
     // Отображение данных с датчика
-    strAzAngle = AzElString(azAngle);
+    strAzAngle = AzElString(azAngle, false);
 
     // Отображение цели
-    strAzTarget = AzElString(azTarget);
+    strAzTarget = AzElString(azTarget, false);
 
     // Отображение элевация с датчика
     lcd.setCursor(11, 1);
@@ -782,7 +794,6 @@ void loop()
     {
       strElTarget = "  " + String(elTarget);
     }
-
   }
 
   //PC
@@ -817,14 +828,14 @@ void loop()
     offsetSwitchIndicator();
 
     // Отображение данных с датчика
-    strAzAngle = AzElString(azAngle);
+    strAzAngle = AzElString(azAngle, false);
 
     // Отображение азимута
     lcd.setCursor(6, 1);
     lcd.print(strAzAngle);
 
     // Отображение цели
-    strAzTargetPort = AzElString(azTargetPort);
+    strAzTargetPort = AzElString(azTargetPort, false);
 
     lcd.setCursor(6, 0);
     lcd.print(strAzTargetPort);
@@ -884,18 +895,16 @@ void loop()
     switch (buttonEnc())
     {
     case 1:
-      break;
-    case 2:
-      Az_El();
-      break;
-    }
-
-    if (buttonEnc() == 1)
-    {
-      if (newSettingsStruct.deltaDirection != deltaDirection)
+      if (newSettingsStruct.deltaDirectionAz != deltaDirectionAz)
       {
-        newSettingsStruct.deltaDirection = deltaDirection;
+        newSettingsStruct.deltaDirectionAz = deltaDirectionAz;
       }
+
+      if (newSettingsStruct.deltaDirectionEl != deltaDirectionEl)
+      {
+        newSettingsStruct.deltaDirectionEl = deltaDirectionEl;
+      }
+      
       if (newSettingsStruct.azDelta != azDelta)
       {
         newSettingsStruct.azDelta = azDelta;
@@ -905,10 +914,24 @@ void loop()
       {
         newSettingsStruct.offsetAz = offsetAz;
       }
+
+      if (newSettingsStruct.elDelta != elDelta)
+      {
+        newSettingsStruct.elDelta = elDelta;
+      }
+
+      if (newSettingsStruct.offsetEl != offsetEl)
+      {
+        newSettingsStruct.offsetEl = offsetEl;
+      }
       eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
       eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
       clearFlag = true;
       appScreen = 0;
+      break;
+    case 2:
+      Az_El();
+      break;
     }
 
     if (switchAzEl == 1)
@@ -923,8 +946,8 @@ void loop()
     }
 
     // Отображение данных с датчика азимута
-    strAzAngle = AzElString(_azAngle);
-    strAzOffset = AzElString(offsetAz);
+    strAzAngle = AzElString(_azAngle, false);
+    strAzOffset = AzElString(offsetAz, false);
     // Отображение азимута
     lcd.setCursor(8, 0);
     lcd.print(strAzAngle);
@@ -933,9 +956,9 @@ void loop()
     lcd.print(strAzOffset);
 
     // Отображение данных с датчика азимута
-    strElAngle = AzElString(_elAngle);
+    strElAngle = AzElString(_elAngle, true);
     // Отображение смещения элевации
-    strElOffset = AzElString(offsetEl);
+    strElOffset = AzElString(offsetEl, true);
 
     // Отображение элевации
     lcd.setCursor(8, 1);
