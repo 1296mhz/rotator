@@ -839,15 +839,6 @@ void loop()
     lcd.print(strAzTargetPort);
 
     strElAngle = AzElString(elAngle, true);
-    // if (elAngle < 100)
-    // {
-    //   strElAngle = " " + String(elAngle);
-    // }
-
-    // if (elAngle < 10)
-    // {
-    //   strElAngle = "  " + String(elAngle);
-    // }
 
     // Отображение элевация
     lcd.setCursor(11, 1);
@@ -855,15 +846,6 @@ void loop()
 
     strElTargetPort = AzElString(elTargetPort, true);
 
-    // if (elTargetPort < 100)
-    // {
-    //   strElTargetPort = " " + String(elTargetPort);
-    // }
-
-    // if (elTargetPort < 10)
-    // {
-    //   strElTargetPort = "  " + String(elTargetPort);
-    // }
     lcd.setCursor(11, 0);
     lcd.print(strElTargetPort);
   }
