@@ -55,7 +55,8 @@ bool elMove = false;
 float azAngleSensor = 0.0; // С сенcора угла азимута
 
 //Флаг включения смещения
-bool offsetFlag = false;
+bool offsetFlagAz = false;
+bool offsetFlagEl = false;
 // Хранение смещения для азимута
 int offsetAz = 0;
 int azAngle = 0;    // Угол азимута
@@ -97,7 +98,8 @@ int elPortTarget = 0;
 
 struct SettingsStruct
 {
-  bool offsetFlag;
+  bool offsetFlagAz;
+  bool offsetFlagEl;
   byte deltaDirectionAz;
   int azDelta;
   int offsetAz;
@@ -343,7 +345,7 @@ int sensorAzToRealAz(int sensorAz, int delta)
 
 int offsetFilter(bool offsetFlag, int sensorAz)
 {
-  if (offsetFlag)
+  if (offsetFlagAz)
   {
     return sensorAzToRealAz(sensorAz, azDelta);
   }
@@ -355,7 +357,18 @@ int offsetFilter(bool offsetFlag, int sensorAz)
 
 void offsetSwitchIndicator()
 {
-  if (offsetFlag)
+  if (offsetFlagAz)
+  {
+    lcd.setCursor(15, 0);
+    lcd.print("#");
+  }
+  else
+  {
+    lcd.setCursor(15, 0);
+    lcd.print(" ");
+  }
+
+  if (offsetFlagEl)
   {
     lcd.setCursor(15, 1);
     lcd.print("#");
@@ -404,60 +417,56 @@ int AppScreen()
   return appScreen;
 }
 
-void SwitchOffset()
+void SwitchOffsetAz()
 {
-  if (offsetFlag)
+  if (offsetFlagAz)
   {
-    offsetFlag = false;
-    if (newSettingsStruct.offsetFlag != false)
+    offsetFlagAz = false;
+    if (newSettingsStruct.offsetFlagAz != false)
     {
-      newSettingsStruct.offsetFlag = false;
+      newSettingsStruct.offsetFlagAz = false;
       eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
       eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
     }
   }
   else
   {
-    offsetFlag = true;
-    if (newSettingsStruct.offsetFlag != true)
+    offsetFlagAz = true;
+    if (newSettingsStruct.offsetFlagAz != true)
     {
-      newSettingsStruct.offsetFlag = true;
+      newSettingsStruct.offsetFlagAz = true;
+      eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+      eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+    }
+  }
+
+}
+
+void SwitchOffsetEl(){
+  if (offsetFlagEl)
+  {
+    offsetFlagEl = false;
+    if (newSettingsStruct.offsetFlagEl != false)
+    {
+      newSettingsStruct.offsetFlagEl = false;
+      eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+      eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
+    }
+  }
+  else
+  {
+    offsetFlagEl = true;
+    if (newSettingsStruct.offsetFlagEl != true)
+    {
+      newSettingsStruct.offsetFlagEl = true;
       eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
       eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
     }
   }
 }
 
-void BtnSwitchOffset(int keyAnalog)
-{
-  if (keyAnalog < 400 && keyAnalog > 200)
-  {
-    if ((millis() - buttonPressTime > 200))
-    {
-      if (offsetFlag)
-      {
-        offsetFlag = false;
-        if (newSettingsStruct.offsetFlag != false)
-        {
-          newSettingsStruct.offsetFlag = false;
-          eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-          eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-        }
-      }
-      else
-      {
-        offsetFlag = true;
-        if (newSettingsStruct.offsetFlag != true)
-        {
-          newSettingsStruct.offsetFlag = true;
-          eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-          eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-        }
-      }
-      buttonPressTime = millis();
-    }
-  }
-}
+
+
 
 void CursorAzEl(boolean switch_cursor_one, byte cursor_one, byte cursor_one_string, boolean switch_cursor_two, byte cursor_two, byte cursor_two_string)
 {
@@ -558,10 +567,11 @@ void setup()
   if (eeprom_read_byte(1023) != 137)
   {
     SettingsStruct settingsStruct;
-    settingsStruct.offsetFlag = false;
+    settingsStruct.offsetFlagAz = false;
     settingsStruct.deltaDirectionAz = 1;
     settingsStruct.azDelta = 0;
     settingsStruct.offsetAz = 0;
+    settingsStruct.offsetFlagEl = false;
     settingsStruct.deltaDirectionEl = 1;
     settingsStruct.elDelta = 0;
     settingsStruct.offsetEl = 0;
@@ -595,7 +605,8 @@ void setup()
   last_millis = millis();
 
   eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-  offsetFlag = newSettingsStruct.offsetFlag;
+  offsetFlagAz = newSettingsStruct.offsetFlagAz;
+  offsetFlagEl = newSettingsStruct.offsetFlagEl;
   deltaDirectionAz = newSettingsStruct.deltaDirectionAz;
   azDelta = newSettingsStruct.azDelta;
   offsetAz = newSettingsStruct.offsetAz;
@@ -607,7 +618,11 @@ void setup()
   getNetworkSensor();
 #endif
   int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  azAngle = offsetFilter(offsetFlag, _azAngle);
+  azAngle = offsetFilter(offsetFlagAz, _azAngle);
+}
+
+bool offsetAzEl()
+{
 }
 
 void loop()
@@ -616,7 +631,7 @@ void loop()
   getNetworkSensor();
 #endif
   int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  azAngle = offsetFilter(offsetFlag, _azAngle);
+  azAngle = offsetFilter(offsetFlagAz, _azAngle);
 
   // MANUAL
   if (appScreen == 0)
@@ -641,12 +656,7 @@ void loop()
       break;
     }
 
-    switch (buttonMulti())
-    {
-    case 1:
-      SwitchOffset();
-      break;
-    }
+
 
     CursorAzEl(true, 4, 0, true, 9, 0);
     offsetSwitchIndicator();
@@ -811,12 +821,7 @@ void loop()
       break;
     }
 
-    switch (buttonMulti())
-    {
-    case 1:
-      SwitchOffset();
-      break;
-    }
+
     offsetSwitchIndicator();
 
     if (Serial.available())
@@ -930,7 +935,6 @@ void loop()
   //SETTINGS
   if (appScreen == 2)
   {
-
     if (clearFlag)
     {
       clearDisplay();
@@ -942,6 +946,16 @@ void loop()
       lcd.print("OSET EL ");
     }
     CursorAzEl(true, 4, 0, true, 4, 1);
+
+      switch (buttonEnc())
+      {
+      case 1:
+        break;
+      case 2:
+        Az_El();
+        break;
+      }
+
     switch (buttonMode())
     {
     case 1:
@@ -951,58 +965,31 @@ void loop()
       }
       break;
     }
-    // offsetSwitchIndicator();
-    switch (buttonEnc())
-    {
-    case 1:
-      if (newSettingsStruct.deltaDirectionAz != deltaDirectionAz)
-      {
-        newSettingsStruct.deltaDirectionAz = deltaDirectionAz;
-      }
-
-      if (newSettingsStruct.deltaDirectionEl != deltaDirectionEl)
-      {
-        newSettingsStruct.deltaDirectionEl = deltaDirectionEl;
-      }
-
-      if (newSettingsStruct.azDelta != azDelta)
-      {
-        newSettingsStruct.azDelta = azDelta;
-      }
-
-      if (newSettingsStruct.offsetAz != offsetAz)
-      {
-        newSettingsStruct.offsetAz = offsetAz;
-      }
-
-      if (newSettingsStruct.elDelta != elDelta)
-      {
-        newSettingsStruct.elDelta = elDelta;
-      }
-
-      if (newSettingsStruct.offsetEl != offsetEl)
-      {
-        newSettingsStruct.offsetEl = offsetEl;
-      }
-      eeprom_write_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-      eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
-      clearFlag = true;
-      appScreen = 0;
-      break;
-    case 2:
-      Az_El();
-      break;
-    }
+    offsetSwitchIndicator();
 
     if (switchAzEl == 1)
     {
       RotateEncoder(&offsetAz, AZ_STEP, true);
       azDelta = azDeltaGen(_azAngle, offsetAz);
+ 
+
+    switch (buttonMulti())
+    {
+    case 1:
+      SwitchOffsetAz();
+      break;
+    }
     }
 
     if (switchAzEl == 2)
     {
       RotateEncoder(&offsetEl, EL_STEP, false);
+    switch (buttonMulti())
+    {
+    case 1:
+      SwitchOffsetEl();
+      break;
+    }
     }
 
     // Отображение данных с датчика азимута
