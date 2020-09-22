@@ -159,7 +159,6 @@ void btnOperate()
     {
       operFlag = true;
       digitalWrite(LED_OPER_PIN, HIGH);
-      return;
     }
     else
     {
@@ -223,10 +222,10 @@ void sky()
   // dummy func
   Serial.println("To sky");
   // delay(500);
-  digitalWrite(PIN_UP, LOW);
+ // digitalWrite(PIN_UP, LOW);
   _elAngle++;
-  delay(500);
-  digitalWrite(PIN_UP, HIGH);
+ // delay(500);
+ // digitalWrite(PIN_UP, HIGH);
 }
 
 void ground()
@@ -234,10 +233,10 @@ void ground()
   // dummy func
   Serial.println("To ground");
   //delay(500);
-  digitalWrite(PIN_DOWN, LOW);
+//  digitalWrite(PIN_DOWN, LOW);
   _elAngle--;
-  delay(500);
-  digitalWrite(PIN_UP, HIGH);
+//  delay(500);
+//  digitalWrite(PIN_UP, HIGH);
 }
 
 uint8_t btn(int KEY)
@@ -413,8 +412,6 @@ int offsetFilterEl(bool offsetFlagEl, int sensorEl)
 {
   if (offsetFlagEl)
   {
-    Serial.print("offsetFlagEl ");
-    Serial.println(offsetFlagEl);
     return sensorElToRealEl(sensorEl, elDelta);
   }
   else
@@ -713,7 +710,9 @@ void setup()
 #endif
   _azAngle = int(round(azAngleSensor / 1024.0 * 360));
   // _elAngle = int(round(elAngleSensor / 1024.0 * 180));
-  azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
+azAngle = offsetFilterAz(false, _azAngle);
+
+  // azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
   elAngle = offsetFilterEl(offsetFlagEl, _elAngle);
 }
 
@@ -723,10 +722,12 @@ void loop()
   getNetworkSensor();
 #endif
 
-  lcd.setCursor(0, 3);
-  lcd.print("F: ");
-  lcd.setCursor(4, 3);
-  lcd.print(operFlag);
+  _azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  // _elAngle = int(round(elAngleSensor / 1024.0 * 180));
+  azAngle = offsetFilterAz(azAngleSensor, _azAngle);
+
+  // azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
+  elAngle = offsetFilterEl(offsetFlagEl, _elAngle);
 
   if (btn(BTN_MODE) == 1)
   {
@@ -735,11 +736,6 @@ void loop()
     AppScreen();
     // }
   }
-
-  _azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  //_elAngle = int(round(elAngleSensor / 1024.0 * 180));
-  azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
-  elAngle = offsetFilterEl(offsetFlagEl, _elAngle);
 
   // MANUAL
   if (appScreen == 0)
@@ -1012,8 +1008,8 @@ void loop()
         if (elPortTarget == elAngle)
         {
           elMove = false;
-          digitalWrite(PIN_UP, LOW);
-          digitalWrite(PIN_DOWN, LOW);
+          digitalWrite(PIN_UP, HIGH);
+          digitalWrite(PIN_DOWN, HIGH);
         }
       }
     }
