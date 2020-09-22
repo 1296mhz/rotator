@@ -18,22 +18,28 @@
 
 #define NETWORK
 
-#define ENC_BUTTON_PIN 4 // the number of the pushbutton encoder pin
-//#define LED_PIN 13     // select the pin for the LED
-#define PIN_CLK 2
-#define PIN_DT 3
+// Реле
+#define PIN_CCW 30   // Поворот против часовой стрелки
+#define PIN_CW 29    // Поворот по часовой стрелки
+#define PIN_SPEED 31 // Скорость поворота
 
-#define PIN_CCW 7   // Поворот против часовой стрелки
-#define PIN_CW 6    // Поворот по часовой стрелки
-#define PIN_SPEED 8 //Скорость поворота
+#define PIN_UP 27   // Актуатор вверх
+#define PIN_DOWN 28 // Актуатор вниз
 
-// #define PIN_TO_SKY 5    // В небо
-// #define PIN_TO_GROUND 9 // В землю
-
-#define PIN_BTN_MODE 5
-#define PIN_BTN_MULTI 9
 //Кнопки
-#define BTN_AZ_EL 1
+// #define BTN_CW 21      // Реле по часовой стрелке
+// #define BTN_CCW 22     // Реле против часовой стрелки
+#define BTN_OPERATE 19 // Включение отключение
+#define BTN_AZ_EL 24   // Переключение между - азимутом и эливацией
+#define BTN_MODE 25    // Кнопка вид работы MANUAL/PORT/SETTING
+#define BTN_CCW 15     // AZ CCW, EL DOWN
+#define BTN_CW 17      // AZ CW, EL UP
+
+#define ENC_BUTTON_PIN 4 // Вклюбчение отключени по умолчанию ротатор в режиме OFF
+#define PIN_CLK 2        // Энкодер
+#define PIN_DT 3         // Энкодер
+
+#define LED_OPER_PIN 26 // Светодиод OPER ON/OFF
 
 EthernetUDP udp;
 
@@ -43,28 +49,26 @@ byte encoder, encoderPrev;
 // byte elEncoder, elEncoderPrev;
 int buttonPressTime = 0;
 
-//Флаг очистки эерана на каждом скрине
-bool clearFlag = false;
+bool clearFlag = false; //Флаг очистки эерана на каждом скрине
 
-// Флаг для включения вращения по азимуту
-bool azMove = false;
-// Флаг для включения вращения по элевации
-bool elMove = false;
+bool azMove = false; // Флаг для включения вращения по азимуту
 
+bool elMove = false; // Флаг для включения вращения по элевации
+
+bool operFlag = false;
 // Для азимута
 float azAngleSensor = 0.0; // С сенcора угла азимута
 
-//Флаг включения смещения
-bool offsetFlagAz = false;
-bool offsetFlagEl = false;
-// Хранение смещения для азимута
-int offsetAz = 0;
+bool offsetFlagAz = false; // Флаг включения смещения AZ
+bool offsetFlagEl = false; // Флаг включения смещения EL
+
+int offsetAz = 0;   // Хранение смещения для азимута
 int azAngle = 0;    // Угол азимута
 int azTarget = 180; // Цель для поворота
 int azDelta = 0;
-
+int _azAngle = 0;
 float elAngleSensor = 0.0; // С сенcора угла элевации
-// Хранение смещения для элевации
+                           // Хранение смещения для элевации
 int offsetEl = 0;
 int elAngle = 0;
 int elTarget = 0;
@@ -72,8 +76,8 @@ int elDelta = 0;
 int _elAngle = 0;
 byte deltaDirectionAz = 1;
 byte deltaDirectionEl = 1;
-//Флаг переключение азимут/элевация
-byte switchAzEl = 1;
+
+byte switchAzEl = 1; //Флаг переключение азимут/элевация
 
 //Переменная для отображения азимута  в режиме MANUAL
 String strAzAngle;  // Текущее положение антенны
@@ -108,8 +112,8 @@ struct SettingsStruct
   int elDelta;
 };
 SettingsStruct newSettingsStruct;
-LiquidCrystal_I2C lcd(0x27, 16, 2);
-
+// LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 // Экран 0 - MANUAL, 1 - PORT, 2 - SETTINGS
 byte appScreen = 0;
 bool correctFlag = false;
@@ -131,6 +135,7 @@ void getNetworkSensor()
       sscanf(msg, "%s %s", &az, &el);
       azAngleSensor = atof(az);
       elAngleSensor = atof(el);
+
       free(msg);
     } while ((size = udp.available()) > 0);
     udp.flush();
@@ -143,6 +148,23 @@ void getNetworkSensor()
     success = udp.endPacket();
     udp.stop();
     udp.begin(PORT);
+  }
+}
+
+void btnOperate(){
+    if (btn(BTN_OPERATE) == 0)
+  {
+    if (!operFlag)
+    {
+      operFlag = true;
+      digitalWrite(LED_OPER_PIN, HIGH);
+      return;
+    }
+    else
+    {
+      operFlag = false;
+      digitalWrite(LED_OPER_PIN, LOW);
+    }
   }
 }
 
@@ -171,15 +193,11 @@ void speed(bool spd)
 {
   if (spd)
   {
-    // lcd.setCursor(15, 0);
-    // lcd.print("F");
     digitalWrite(PIN_SPEED, HIGH);
   }
 
   if (!spd)
   {
-    // lcd.setCursor(15, 0);
-    // lcd.print("S");
     digitalWrite(PIN_SPEED, LOW);
   }
 }
@@ -203,19 +221,50 @@ void sky()
 {
   // dummy func
   Serial.println("To sky");
+  // delay(500);
+  digitalWrite(PIN_UP, LOW);
+  _elAngle++;
   delay(500);
-  elAngle++;
+  digitalWrite(PIN_UP, HIGH);
 }
 
 void ground()
 {
   // dummy func
   Serial.println("To ground");
+  //delay(500);
+  digitalWrite(PIN_DOWN, LOW);
+  _elAngle--;
   delay(500);
-  elAngle--;
+  digitalWrite(PIN_UP, HIGH);
 }
 
-uint8_t buttonEnc()
+uint8_t btn(int KEY)
+{
+  if (digitalRead(KEY) == 1)
+  {
+    last_millis = millis();
+    return 0;
+  }
+  delay(30);
+  while (digitalRead(KEY) == 0)
+    ;
+  delay(30);
+  if (last_millis + 65 > millis())
+  {
+    last_millis = millis();
+    return 0;
+  }
+  if (last_millis + 300 > millis())
+  {
+    last_millis = millis();
+    return 1;
+  }
+  last_millis = millis();
+  return 2;
+};
+
+uint8_t btnEnc()
 {
   if (digitalRead(ENC_BUTTON_PIN) == 1)
   {
@@ -224,56 +273,6 @@ uint8_t buttonEnc()
   }
   delay(30);
   while (digitalRead(ENC_BUTTON_PIN) == 0)
-    ;
-  delay(30);
-  if (last_millis + 65 > millis())
-  {
-    last_millis = millis();
-    return 0;
-  }
-  if (last_millis + 300 > millis())
-  {
-    last_millis = millis();
-    return 1;
-  }
-  last_millis = millis();
-  return 2;
-};
-
-uint8_t buttonMode()
-{
-  if (digitalRead(PIN_BTN_MODE) == 0)
-  {
-    last_millis = millis();
-    return 0;
-  }
-  delay(30);
-  while (digitalRead(PIN_BTN_MODE) == 1)
-    ;
-  delay(30);
-  if (last_millis + 65 > millis())
-  {
-    last_millis = millis();
-    return 0;
-  }
-  if (last_millis + 300 > millis())
-  {
-    last_millis = millis();
-    return 1;
-  }
-  last_millis = millis();
-  return 2;
-};
-
-uint8_t buttonMulti()
-{
-  if (digitalRead(PIN_BTN_MULTI) == 0)
-  {
-    last_millis = millis();
-    return 0;
-  }
-  delay(30);
-  while (digitalRead(PIN_BTN_MULTI) == 1)
     ;
   delay(30);
   if (last_millis + 65 > millis())
@@ -310,6 +309,26 @@ int azDeltaGen(int sensorAz, int realAz)
   }
 }
 
+int elDeltaGen(int sensorEl, int realEl)
+{
+  if (sensorEl == realEl)
+  {
+    deltaDirectionEl = 1;
+  }
+
+  if (sensorEl < realEl)
+  {
+    deltaDirectionEl = 3;
+    return abs(realEl - sensorEl);
+  }
+
+  if (sensorEl > realEl)
+  {
+    deltaDirectionEl = 2;
+    return 180 - abs(sensorEl - realEl) + 1;
+  }
+}
+
 int sensorAzToRealAz(int sensorAz, int delta)
 {
   if (deltaDirectionAz == 1)
@@ -343,7 +362,43 @@ int sensorAzToRealAz(int sensorAz, int delta)
   }
 }
 
-int offsetFilter(bool offsetFlag, int sensorAz)
+int sensorElToRealEl(int sensorEl, int delta)
+{
+  Serial.print("sensorElToRealEl ");
+  Serial.println(delta);
+  if (deltaDirectionEl == 1)
+  {
+    return sensorEl;
+  }
+
+  if (deltaDirectionEl == 2)
+  {
+    if (sensorEl + delta > 180)
+    {
+      return (sensorEl + delta - 180) - 1;
+    }
+    if (sensorEl + delta > 0)
+    {
+      return sensorEl + delta;
+    }
+  }
+
+  if (deltaDirectionEl == 3)
+  {
+    if (sensorEl - delta > 0)
+    {
+      return sensorEl - delta;
+    }
+    if (sensorEl - delta < 0)
+    {
+      return 180 - abs(sensorEl - delta);
+    }
+
+    return sensorEl - delta;
+  }
+}
+
+int offsetFilterAz(bool offsetFlagAz, int sensorAz)
 {
   if (offsetFlagAz)
   {
@@ -355,12 +410,26 @@ int offsetFilter(bool offsetFlag, int sensorAz)
   }
 }
 
+int offsetFilterEl(bool offsetFlagEl, int sensorEl)
+{
+  if (offsetFlagEl)
+  {
+    Serial.print("offsetFlagEl ");
+    Serial.println(offsetFlagEl);
+    return sensorElToRealEl(sensorEl, elDelta);
+  }
+  else
+  {
+    return sensorEl;
+  }
+}
+
 void offsetSwitchIndicator()
 {
   if (offsetFlagAz)
   {
     lcd.setCursor(15, 0);
-    lcd.print("#");
+    lcd.print("a");
   }
   else
   {
@@ -371,7 +440,7 @@ void offsetSwitchIndicator()
   if (offsetFlagEl)
   {
     lcd.setCursor(15, 1);
-    lcd.print("#");
+    lcd.print("e");
   }
   else
   {
@@ -439,10 +508,10 @@ void SwitchOffsetAz()
       eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
     }
   }
-
 }
 
-void SwitchOffsetEl(){
+void SwitchOffsetEl()
+{
   if (offsetFlagEl)
   {
     offsetFlagEl = false;
@@ -464,9 +533,6 @@ void SwitchOffsetEl(){
     }
   }
 }
-
-
-
 
 void CursorAzEl(boolean switch_cursor_one, byte cursor_one, byte cursor_one_string, boolean switch_cursor_two, byte cursor_two, byte cursor_two_string)
 {
@@ -562,7 +628,23 @@ int RotateEncoder(int *tgt, byte STEP, bool az_el)
 
 void setup()
 {
+  attachInterrupt(4, btnOperate, FALLING);
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.begin(20, 4);
+  lcd.print("*R8CDF*");
   speed(true);
+
+  if (!operFlag)
+  {
+    digitalWrite(LED_OPER_PIN, LOW);
+  }
+  else
+  {
+    digitalWrite(LED_OPER_PIN, HIGH);
+  }
+
   //Magic number 137
   if (eeprom_read_byte(1023) != 137)
   {
@@ -586,10 +668,6 @@ void setup()
   int success = udp.begin(PORT);
 #endif
   Serial.begin(9600);
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
-  // lcd.print("*R8CDF*");
 
   delay(1000);
   lcd.clear();
@@ -597,13 +675,29 @@ void setup()
   pinMode(PIN_CLK, INPUT_PULLUP);
   pinMode(PIN_DT, INPUT_PULLUP);
   pinMode(ENC_BUTTON_PIN, INPUT_PULLUP);
+
   pinMode(PIN_CCW, OUTPUT);
   pinMode(PIN_CW, OUTPUT);
   pinMode(PIN_SPEED, OUTPUT);
-  pinMode(PIN_BTN_MODE, INPUT_PULLUP);
-  pinMode(PIN_BTN_MULTI, INPUT_PULLUP);
-  last_millis = millis();
 
+  pinMode(PIN_UP, OUTPUT);
+  pinMode(PIN_DOWN, OUTPUT);
+
+  pinMode(LED_OPER_PIN, OUTPUT);
+
+  pinMode(BTN_OPERATE, INPUT_PULLUP);
+  pinMode(BTN_AZ_EL, INPUT_PULLUP);
+  pinMode(BTN_MODE, INPUT_PULLUP);
+
+  pinMode(BTN_CW, INPUT_PULLUP);
+  pinMode(BTN_CCW, INPUT_PULLUP);
+  digitalWrite(PIN_CW, HIGH);
+  digitalWrite(PIN_CCW, HIGH);
+  digitalWrite(PIN_UP, HIGH);
+  digitalWrite(PIN_DOWN, HIGH);
+
+  last_millis = millis();
+  Serial.println('R8CDF RoToR');
   eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
   offsetFlagAz = newSettingsStruct.offsetFlagAz;
   offsetFlagEl = newSettingsStruct.offsetFlagEl;
@@ -617,12 +711,10 @@ void setup()
 #ifdef NETWORK
   getNetworkSensor();
 #endif
-  int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  azAngle = offsetFilter(offsetFlagAz, _azAngle);
-}
-
-bool offsetAzEl()
-{
+  _azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  // _elAngle = int(round(elAngleSensor / 1024.0 * 180));
+  azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
+  elAngle = offsetFilterEl(offsetFlagEl, _elAngle);
 }
 
 void loop()
@@ -630,8 +722,25 @@ void loop()
 #ifdef NETWORK
   getNetworkSensor();
 #endif
-  int _azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  azAngle = offsetFilter(offsetFlagAz, _azAngle);
+
+
+  lcd.setCursor(0, 3);
+  lcd.print("F: ");
+  lcd.setCursor(4, 3);
+  lcd.print(operFlag);
+
+  if (btn(BTN_MODE) == 1)
+  {
+    if (azMove != true && elMove != true)
+    {
+      AppScreen();
+    }
+  }
+
+  _azAngle = int(round(azAngleSensor / 1024.0 * 360));
+  //_elAngle = int(round(elAngleSensor / 1024.0 * 180));
+  azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
+  elAngle = offsetFilterEl(offsetFlagEl, _elAngle);
 
   // MANUAL
   if (appScreen == 0)
@@ -646,129 +755,106 @@ void loop()
       lcd.print(" MAN");
     }
 
-    switch (buttonMode())
-    {
-    case 1:
-      if (azMove != true && elMove != true)
-      {
-        AppScreen();
-      }
-      break;
-    }
-
-
-
     CursorAzEl(true, 4, 0, true, 9, 0);
     offsetSwitchIndicator();
-    if (switchAzEl == 1)
+    if (operFlag)
     {
-
-      RotateEncoder(&azTarget, AZ_STEP, true);
-      switch (buttonEnc())
+      if (switchAzEl == 1)
       {
-      case 1:
-        azMove = true;
-        strAzTarget = AzElString(azTarget, false);
-        break;
-      case 2:
-        Az_El();
-        break;
-      }
-    }
 
-    if (switchAzEl == 2)
-    {
-      currentTime = millis();
-      if (currentTime >= (loopTime + 15))
-      {
-        encoder = digitalRead(PIN_CLK);
-        if ((!encoder) && (encoderPrev))
+        RotateEncoder(&azTarget, AZ_STEP, true);
+
+        if (btnEnc() == 1)
         {
-          if (digitalRead(PIN_DT))
+          azMove = true;
+          strAzTarget = AzElString(azTarget, false);
+        }
+
+        if (btn(BTN_AZ_EL) == 1)
+        {
+          Az_El();
+        }
+
+        if (btn(BTN_CW) == 1) {
+          cw();
+        }
+
+        if (btn(BTN_CCW) == 1) {
+          ccw();
+        }
+      }
+
+      if (switchAzEl == 2)
+      {
+        RotateEncoder(&elTarget, EL_STEP, false);
+        loopTime = currentTime;
+
+        if (btnEnc() == 1)
+        {
+          elMove = true;
+          strElTarget = AzElString(elTarget, true);
+        }
+
+        if (btn(BTN_AZ_EL) == 1)
+        {
+          Az_El();
+        }
+      }
+
+      if (azMove)
+      {
+        if (azTarget - azAngle >= 1)
+        {
+          if (abs(azTarget - azAngle) > 20)
           {
-            if (elTarget + EL_STEP <= 90)
-              elTarget += EL_STEP;
+            speed(true);
           }
-          else
+          if (abs(azTarget - azAngle) < 20)
           {
-            if (elTarget - EL_STEP >= 0)
-              elTarget -= EL_STEP;
+            speed(false);
           }
+          cw();
         }
-        encoderPrev = encoder;
-      }
 
-      loopTime = currentTime;
-
-      switch (buttonEnc())
-      {
-      case 1:
-        elMove = true;
-        strElTarget = AzElString(elTarget, true);
-        break;
-      case 2:
-        Az_El();
-        break;
-      }
-    }
-
-    if (azMove)
-    {
-      if (azTarget - azAngle >= 1)
-      {
-        if (abs(azTarget - azAngle) > 20)
+        if (azAngle - azTarget >= 1)
         {
-          speed(true);
+          if (abs(azAngle - azTarget) > 20)
+          {
+            speed(true);
+          }
+          if (abs(azAngle - azTarget) < 20)
+          {
+            speed(false);
+          }
+          ccw();
         }
-        if (abs(azTarget - azAngle) < 20)
+
+        if (azTarget == azAngle)
         {
-          speed(false);
+          azMove = false;
+          lcd.setCursor(14, 0);
+          lcd.print(" ");
+          digitalWrite(PIN_CW, LOW);
+          digitalWrite(PIN_CCW, LOW);
         }
-        cw();
       }
 
-      if (azAngle - azTarget >= 1)
+      if (elMove)
       {
-        if (abs(azAngle - azTarget) > 20)
+        if (elTarget - elAngle >= 1)
         {
-          speed(true);
+          sky();
         }
-        if (abs(azAngle - azTarget) < 20)
+
+        if (elAngle - elTarget >= 1)
         {
-          speed(false);
+          ground();
         }
-        ccw();
-      }
 
-      if (azTarget == azAngle)
-      {
-        azMove = false;
-        lcd.setCursor(14, 0);
-        lcd.print(" ");
-        digitalWrite(PIN_CW, HIGH);
-        digitalWrite(PIN_CCW, HIGH);
-      }
-    }
-
-    if (elMove)
-    {
-      if (elTarget - elAngle >= 1)
-      {
-        sky();
-      }
-
-      if (elAngle - elTarget >= 1)
-      {
-        ground();
-      }
-
-      if (elTarget == elAngle)
-      {
-        elMove = false;
-        // lcd.setCursor(14, 0);
-        //  lcd.print(" ");
-        // digitalWrite(PIN_TO_SKY, HIGH);
-        // digitalWrite(PIN_TO_GROUND, HIGH);
+        if (elTarget == elAngle)
+        {
+          elMove = false;
+        }
       }
     }
 
@@ -811,99 +897,96 @@ void loop()
       lcd.print("PORT");
     }
 
-    switch (buttonMode())
+    if (btn(BTN_MODE) == 1)
     {
-    case 1:
       if (azMove != true && elMove != true)
       {
         AppScreen();
       }
-      break;
     }
-
 
     offsetSwitchIndicator();
-
-    if (Serial.available())
+    if (operFlag)
     {
 
-      PortRead = Serial.readString();
-      int buffer_len = PortRead.length() + 1;
-      char port_char_array[buffer_len];
-      char az[7], el[7];
-
-      sscanf(PortRead.c_str(), "%s %s", &az, &el);
-      azPortTarget = int(round(atof(az)));
-      elPortTarget = int(round(atof(el)));
-
-      if (azPortTarget >= 0 && azPortTarget <= 359)
+      if (Serial.available())
       {
-        azMove = true;
-      }
 
-      if (elPortTarget >= 0 && elPortTarget <= 90)
-      {
-        elMove = true;
-      }
-    }
+        PortRead = Serial.readString();
+        int buffer_len = PortRead.length() + 1;
+        char port_char_array[buffer_len];
+        char az[7], el[7];
 
-    if (azMove)
-    {
-      if (azPortTarget - azAngle >= 1)
-      {
-        if (abs(azPortTarget - azAngle) > 20)
+        sscanf(PortRead.c_str(), "%s %s", &az, &el);
+        azPortTarget = int(round(atof(az)));
+        elPortTarget = int(round(atof(el)));
+
+        if (azPortTarget >= 0 && azPortTarget <= 359)
         {
-          speed(true);
+          azMove = true;
         }
-        if (abs(azPortTarget - azAngle) < 20)
+
+        if ((elPortTarget >= 0) && (elPortTarget <= 180))
         {
-          speed(false);
+          elMove = true;
         }
-        cw();
       }
 
-      if (azAngle - azPortTarget >= 1)
+      if (azMove)
       {
-        if (abs(azAngle - azPortTarget) > 20)
+        if (azPortTarget - azAngle >= 1)
         {
-          speed(true);
+          if (abs(azPortTarget - azAngle) > 20)
+          {
+            speed(true);
+          }
+          if (abs(azPortTarget - azAngle) < 20)
+          {
+            speed(false);
+          }
+          cw();
         }
-        if (abs(azAngle - azPortTarget) < 20)
+
+        if (azAngle - azPortTarget >= 1)
         {
-          speed(false);
+          if (abs(azAngle - azPortTarget) > 20)
+          {
+            speed(true);
+          }
+          if (abs(azAngle - azPortTarget) < 20)
+          {
+            speed(false);
+          }
+          ccw();
         }
-        ccw();
-      }
 
-      if (azPortTarget == azAngle)
-      {
-        azMove = false;
-        lcd.setCursor(14, 0);
-        lcd.print(" ");
-        digitalWrite(PIN_CW, HIGH);
-        digitalWrite(PIN_CCW, HIGH);
+        if (azPortTarget == azAngle)
+        {
+          azMove = false;
+          lcd.setCursor(14, 0);
+          lcd.print(" ");
+          digitalWrite(PIN_CW, LOW);
+          digitalWrite(PIN_CCW, LOW);
+        }
       }
-    }
-
-    if (elMove)
-    {
-      if (elPortTarget - elAngle >= 1)
+      if (elMove)
       {
-        sky();
-      }
+        if (elPortTarget - elAngle >= 1)
+        {
+          sky();
+        }
 
-      if (elPortTarget - elTarget >= 1)
-      {
-        ground();
-      }
+        if (elAngle - elPortTarget >= 1)
+        {
+          ground();
+        }
 
-      if (elPortTarget == elAngle)
-      {
-        elMove = false;
-        // lcd.setCursor(14, 0);
-        //  lcd.print(" ");
-        // digitalWrite(PIN_TO_SKY, HIGH);
-        // digitalWrite(PIN_TO_GROUND, HIGH);
+        if (elPortTarget == elAngle)
+        {
+          elMove = false;
+          digitalWrite(PIN_UP, LOW);
+          digitalWrite(PIN_DOWN, LOW);
+        }
       }
     }
 
@@ -947,53 +1030,45 @@ void loop()
     }
     CursorAzEl(true, 4, 0, true, 4, 1);
 
-      switch (buttonEnc())
-      {
-      case 1:
-        break;
-      case 2:
-        Az_El();
-        break;
-      }
-
-    switch (buttonMode())
+    if (btn(BTN_AZ_EL) == 1)
     {
-    case 1:
+      Az_El();
+    }
+
+    if (btn(BTN_MODE) == 1)
+    {
       if (azMove != true && elMove != true)
       {
         AppScreen();
       }
-      break;
     }
+
     offsetSwitchIndicator();
 
     if (switchAzEl == 1)
     {
       RotateEncoder(&offsetAz, AZ_STEP, true);
       azDelta = azDeltaGen(_azAngle, offsetAz);
- 
 
-    switch (buttonMulti())
-    {
-    case 1:
-      SwitchOffsetAz();
-      break;
-    }
+      if (btn(BTN_CW) == 1 && btn(BTN_CCW) == 1)
+      {
+        SwitchOffsetAz();
+      }
     }
 
     if (switchAzEl == 2)
     {
       RotateEncoder(&offsetEl, EL_STEP, false);
-    switch (buttonMulti())
-    {
-    case 1:
-      SwitchOffsetEl();
-      break;
-    }
+      elDelta = elDeltaGen(_elAngle, offsetEl);
+      if (btn(BTN_CW) == 1 && btn(BTN_CCW) == 1)
+      {
+        SwitchOffsetEl();
+      }
     }
 
     // Отображение данных с датчика азимута
     strAzAngle = AzElString(_azAngle, false);
+    // Отображение смещения азимута
     strAzOffset = AzElString(offsetAz, false);
     // Отображение азимута
     lcd.setCursor(8, 0);
