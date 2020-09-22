@@ -19,9 +19,9 @@
 #define NETWORK
 
 // Реле
-#define PIN_CCW 30   // Поворот против часовой стрелки
+#define PIN_CCW 31   // Поворот против часовой стрелки
 #define PIN_CW 29    // Поворот по часовой стрелки
-#define PIN_SPEED 31 // Скорость поворота
+#define PIN_SPEED 30 // Скорость поворота
 
 #define PIN_UP 27   // Актуатор вверх
 #define PIN_DOWN 28 // Актуатор вниз
@@ -151,8 +151,9 @@ void getNetworkSensor()
   }
 }
 
-void btnOperate(){
-    if (btn(BTN_OPERATE) == 0)
+void btnOperate()
+{
+  if (btn(BTN_OPERATE) == 0)
   {
     if (!operFlag)
     {
@@ -364,8 +365,6 @@ int sensorAzToRealAz(int sensorAz, int delta)
 
 int sensorElToRealEl(int sensorEl, int delta)
 {
-  Serial.print("sensorElToRealEl ");
-  Serial.println(delta);
   if (deltaDirectionEl == 1)
   {
     return sensorEl;
@@ -693,6 +692,7 @@ void setup()
   pinMode(BTN_CCW, INPUT_PULLUP);
   digitalWrite(PIN_CW, HIGH);
   digitalWrite(PIN_CCW, HIGH);
+  digitalWrite(PIN_SPEED, HIGH);
   digitalWrite(PIN_UP, HIGH);
   digitalWrite(PIN_DOWN, HIGH);
 
@@ -723,7 +723,6 @@ void loop()
   getNetworkSensor();
 #endif
 
-
   lcd.setCursor(0, 3);
   lcd.print("F: ");
   lcd.setCursor(4, 3);
@@ -731,10 +730,10 @@ void loop()
 
   if (btn(BTN_MODE) == 1)
   {
-    if (azMove != true && elMove != true)
-    {
-      AppScreen();
-    }
+    //  if (azMove != true && elMove != true)
+    //{
+    AppScreen();
+    // }
   }
 
   _azAngle = int(round(azAngleSensor / 1024.0 * 360));
@@ -775,12 +774,31 @@ void loop()
           Az_El();
         }
 
-        if (btn(BTN_CW) == 1) {
-          cw();
+        if (btn(BTN_CW) == 1)
+        {
+
+          digitalWrite(PIN_CW, LOW);
+          lcd.setCursor(14, 0);
+          lcd.print(">");
+        }
+        else
+        {
+          lcd.setCursor(14, 0);
+          lcd.print(" ");
+          digitalWrite(PIN_CW, HIGH);
         }
 
-        if (btn(BTN_CCW) == 1) {
-          ccw();
+        if (btn(BTN_CCW) == 1)
+        {
+          digitalWrite(PIN_CCW, LOW);
+          lcd.setCursor(14, 0);
+          lcd.print(">");
+        }
+        else
+        {
+          lcd.setCursor(14, 0);
+          lcd.print(" ");
+          digitalWrite(PIN_CCW, HIGH);
         }
       }
 
@@ -834,8 +852,8 @@ void loop()
           azMove = false;
           lcd.setCursor(14, 0);
           lcd.print(" ");
-          digitalWrite(PIN_CW, LOW);
-          digitalWrite(PIN_CCW, LOW);
+          digitalWrite(PIN_CW, HIGH);
+          digitalWrite(PIN_CCW, HIGH);
         }
       }
 
@@ -891,7 +909,7 @@ void loop()
     {
       clearDisplay();
       clearFlag = false;
-      //getSpeed();
+      getSpeed();
       screenManualPort();
       lcd.setCursor(0, 0);
       lcd.print("PORT");
@@ -965,8 +983,8 @@ void loop()
           azMove = false;
           lcd.setCursor(14, 0);
           lcd.print(" ");
-          digitalWrite(PIN_CW, LOW);
-          digitalWrite(PIN_CCW, LOW);
+          digitalWrite(PIN_CW, HIGH);
+          digitalWrite(PIN_CCW, HIGH);
         }
       }
       if (elMove)
@@ -1022,7 +1040,7 @@ void loop()
     {
       clearDisplay();
       clearFlag = false;
-      //getSpeed();
+      getSpeed();
       lcd.setCursor(0, 0);
       lcd.print("OSET AZ ");
       lcd.setCursor(0, 1);
