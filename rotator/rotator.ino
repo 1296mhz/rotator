@@ -774,30 +774,22 @@ void loop()
           Az_El();
         }
 
-        if (btn(BTN_CW) == 1)
+        // Управление кнопками
+        if (digitalRead(BTN_CW) == LOW)
         {
-
           digitalWrite(PIN_CW, LOW);
-          lcd.setCursor(14, 0);
-          lcd.print(">");
         }
         else
         {
-          lcd.setCursor(14, 0);
-          lcd.print(" ");
           digitalWrite(PIN_CW, HIGH);
         }
 
-        if (btn(BTN_CCW) == 1)
+        if (digitalRead(BTN_CCW) == LOW)
         {
           digitalWrite(PIN_CCW, LOW);
-          lcd.setCursor(14, 0);
-          lcd.print(">");
         }
         else
         {
-          lcd.setCursor(14, 0);
-          lcd.print(" ");
           digitalWrite(PIN_CCW, HIGH);
         }
       }
@@ -816,6 +808,24 @@ void loop()
         if (btn(BTN_AZ_EL) == 1)
         {
           Az_El();
+        }
+        // Управление кнопками
+        if (digitalRead(BTN_CW) == LOW)
+        {
+          digitalWrite(PIN_UP, LOW);
+        }
+        else
+        {
+          digitalWrite(PIN_UP, HIGH);
+        }
+
+        if (digitalRead(BTN_CCW) == LOW)
+        {
+          digitalWrite(PIN_DOWN, LOW);
+        }
+        else
+        {
+          digitalWrite(PIN_DOWN, HIGH);
         }
       }
 
