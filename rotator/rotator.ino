@@ -29,12 +29,12 @@
 //Кнопки
 // #define BTN_CW 21      // Реле по часовой стрелке
 // #define BTN_CCW 22     // Реле против часовой стрелки
-#define BTN_OPERATE 19 // Включение отключение
-#define BTN_AZ_EL 24   // Переключение между - азимутом и эливацией
-#define BTN_MODE 25    // Кнопка вид работы MANUAL/PORT/SETTING
-#define BTN_CCW 15     // AZ CCW, EL DOWN
-#define BTN_CW 17      // AZ CW, EL UP
-
+#define BTN_OPERATE 19   // Включение отключение
+#define BTN_AZ_EL 24     // Переключение между - азимутом и эливацией
+#define BTN_MODE 25      // Кнопка вид работы MANUAL/PORT/SETTING
+#define BTN_CCW 15       // AZ CCW, EL DOWN
+#define BTN_CW 17        // AZ CW, EL UP
+#define BTN_CORRECT 9    // Button correct
 #define ENC_BUTTON_PIN 4 // Вклюбчение отключени по умолчанию ротатор в режиме OFF
 #define PIN_CLK 2        // Энкодер
 #define PIN_DT 3         // Энкодер
@@ -57,7 +57,7 @@ bool elMove = false; // Флаг для включения вращения по
 
 bool operFlag = false;
 // Для азимута
-float azAngleSensor = 0.0; // С сенcора угла азимута
+int azAngleSensor = 0; // С сенcора угла азимута
 
 bool offsetFlagAz = false; // Флаг включения смещения AZ
 bool offsetFlagEl = false; // Флаг включения смещения EL
@@ -67,8 +67,8 @@ int azAngle = 0;    // Угол азимута
 int azTarget = 180; // Цель для поворота
 int azDelta = 0;
 int _azAngle = 0;
-float elAngleSensor = 0.0; // С сенcора угла элевации
-                           // Хранение смещения для элевации
+int elAngleSensor = 0; // С сенcора угла элевации
+                       // Хранение смещения для элевации
 int offsetEl = 0;
 int elAngle = 0;
 int elTarget = 0;
@@ -117,7 +117,7 @@ LiquidCrystal_I2C lcd(0x27, 20, 4);
 // Экран 0 - MANUAL, 1 - PORT, 2 - SETTINGS
 byte appScreen = 0;
 bool correctFlag = false;
-uint32_t last_millis;
+volatile uint32_t last_millis;
 
 void getNetworkSensor()
 {
@@ -222,10 +222,10 @@ void sky()
   // dummy func
   Serial.println("To sky");
   // delay(500);
- // digitalWrite(PIN_UP, LOW);
+  // digitalWrite(PIN_UP, LOW);
   _elAngle++;
- // delay(500);
- // digitalWrite(PIN_UP, HIGH);
+  // delay(500);
+  // digitalWrite(PIN_UP, HIGH);
 }
 
 void ground()
@@ -233,35 +233,28 @@ void ground()
   // dummy func
   Serial.println("To ground");
   //delay(500);
-//  digitalWrite(PIN_DOWN, LOW);
+  //  digitalWrite(PIN_DOWN, LOW);
   _elAngle--;
-//  delay(500);
-//  digitalWrite(PIN_UP, HIGH);
+  //  delay(500);
+  //  digitalWrite(PIN_UP, HIGH);
 }
 
 uint8_t btn(int KEY)
 {
-  if (digitalRead(KEY) == 1)
+  bool currentValue = digitalRead(KEY);
+  bool prevValue;
+  if (currentValue != prevValue)
   {
-    last_millis = millis();
+    // Что-то изменилось, здесь возможна зона неопределенности
+    // Делаем задержку
+    delay(40);
+
+    currentValue = digitalRead(KEY);
     return 0;
   }
-  delay(30);
-  while (digitalRead(KEY) == 0)
-    ;
-  delay(30);
-  if (last_millis + 65 > millis())
-  {
-    last_millis = millis();
-    return 0;
-  }
-  if (last_millis + 300 > millis())
-  {
-    last_millis = millis();
-    return 1;
-  }
-  last_millis = millis();
-  return 2;
+
+  prevValue = currentValue;
+  return 1;
 };
 
 uint8_t btnEnc()
@@ -371,9 +364,9 @@ int sensorElToRealEl(int sensorEl, int delta)
 
   if (deltaDirectionEl == 2)
   {
-    if (sensorEl + delta > 180)
+    if (sensorEl + delta > 90)
     {
-      return (sensorEl + delta - 180) - 1;
+      return (sensorEl + delta - 90) - 1;
     }
     if (sensorEl + delta > 0)
     {
@@ -389,7 +382,7 @@ int sensorElToRealEl(int sensorEl, int delta)
     }
     if (sensorEl - delta < 0)
     {
-      return 180 - abs(sensorEl - delta);
+      return 90 - abs(sensorEl - delta);
     }
 
     return sensorEl - delta;
@@ -624,7 +617,7 @@ int RotateEncoder(int *tgt, byte STEP, bool az_el)
 
 void setup()
 {
-  attachInterrupt(4, btnOperate, FALLING);
+
   lcd.init();
   lcd.backlight();
   lcd.clear();
@@ -694,7 +687,7 @@ void setup()
   digitalWrite(PIN_DOWN, HIGH);
 
   last_millis = millis();
-  Serial.println('R8CDF RoToR');
+  Serial.println('R8CDF RoTaTaToR');
   eeprom_read_block((void *)&newSettingsStruct, 0, sizeof(newSettingsStruct));
   offsetFlagAz = newSettingsStruct.offsetFlagAz;
   offsetFlagEl = newSettingsStruct.offsetFlagEl;
@@ -704,16 +697,14 @@ void setup()
   deltaDirectionEl = newSettingsStruct.deltaDirectionEl;
   elDelta = newSettingsStruct.elDelta;
   offsetEl = newSettingsStruct.offsetEl;
-  int _elAngle = 0;
 #ifdef NETWORK
   getNetworkSensor();
 #endif
   _azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  // _elAngle = int(round(elAngleSensor / 1024.0 * 180));
-azAngle = offsetFilterAz(false, _azAngle);
-
-  // azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
+  _elAngle = int(round(elAngleSensor / 1024.0 * 360));
+  azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
   elAngle = offsetFilterEl(offsetFlagEl, _elAngle);
+  attachInterrupt(4, btnOperate, CHANGE);
 }
 
 void loop()
@@ -723,10 +714,8 @@ void loop()
 #endif
 
   _azAngle = int(round(azAngleSensor / 1024.0 * 360));
-  // _elAngle = int(round(elAngleSensor / 1024.0 * 180));
-  azAngle = offsetFilterAz(azAngleSensor, _azAngle);
-
-  // azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
+  _elAngle = int(round(elAngleSensor / 1024.0 * 360));
+  azAngle = offsetFilterAz(offsetFlagAz, _azAngle);
   elAngle = offsetFilterEl(offsetFlagEl, _elAngle);
 
   if (btn(BTN_MODE) == 1)
@@ -950,7 +939,7 @@ void loop()
           azMove = true;
         }
 
-        if ((elPortTarget >= 0) && (elPortTarget <= 180))
+        if ((elPortTarget >= 0) && (elPortTarget <= 90))
         {
           elMove = true;
         }
@@ -1074,9 +1063,22 @@ void loop()
       RotateEncoder(&offsetAz, AZ_STEP, true);
       azDelta = azDeltaGen(_azAngle, offsetAz);
 
-      if (btn(BTN_CW) == 1 && btn(BTN_CCW) == 1)
+      if (btn(BTN_CORRECT) == 1)
       {
         SwitchOffsetAz();
+      }
+
+      // Управление кнопками
+      if (digitalRead(BTN_CW) == LOW)
+      {
+        delay(100);
+        offsetAz++;
+      }
+
+      if (digitalRead(BTN_CCW) == LOW)
+      {
+        delay(100);
+        offsetAz--;
       }
     }
 
@@ -1084,9 +1086,21 @@ void loop()
     {
       RotateEncoder(&offsetEl, EL_STEP, false);
       elDelta = elDeltaGen(_elAngle, offsetEl);
-      if (btn(BTN_CW) == 1 && btn(BTN_CCW) == 1)
+      if (btn(BTN_CORRECT) == 1)
       {
         SwitchOffsetEl();
+      }
+      // Управление кнопками
+      if (digitalRead(BTN_CW) == LOW)
+      {
+        delay(100);
+        offsetEl++;
+      }
+
+      if (digitalRead(BTN_CCW) == LOW)
+      {
+        delay(100);
+        offsetEl--;
       }
     }
 
