@@ -522,7 +522,7 @@ void SwitchOffsetEl()
     }
   }
 }
-
+ 
 void CursorAzEl(boolean switch_cursor_one, byte cursor_one, byte cursor_one_string, boolean switch_cursor_two, byte cursor_two, byte cursor_two_string)
 {
   if (switchAzEl == 1)
@@ -733,7 +733,7 @@ void loop()
     {
       clearDisplay();
       clearFlag = false;
-      getSpeed();
+      // getSpeed();
       screenManualPort();
       lcd.setCursor(0, 0);
       lcd.print(" MAN");
@@ -871,29 +871,24 @@ void loop()
       }
     }
 
-    // Отображение азимута текущего положения антенны
-    lcd.setCursor(6, 1);
-    lcd.print(strAzAngle);
     // Отображение азимута текущей цели антенны
     lcd.setCursor(6, 0);
     lcd.print(strAzTarget);
-
+    // Отображение азимута текущего положения антенны
+    lcd.setCursor(6, 1);
+    lcd.print(strAzAngle);
     // Отображение данных с датчика
     strAzAngle = AzElString(azAngle, false);
-
     // Отображение цели
     strAzTarget = AzElString(azTarget, false);
 
     // Отображение элевация с датчика
     lcd.setCursor(11, 1);
     lcd.print(strElAngle);
-
-    strElAngle = AzElString(elAngle, true);
-
     // Отображение цели элевации
     lcd.setCursor(11, 0);
     lcd.print(strElTarget);
-
+    strElAngle = AzElString(elAngle, true);
     strElTarget = AzElString(elTarget, true);
   }
 
@@ -904,7 +899,7 @@ void loop()
     {
       clearDisplay();
       clearFlag = false;
-      getSpeed();
+      // getSpeed();
       screenManualPort();
       lcd.setCursor(0, 0);
       lcd.print("PORT");
