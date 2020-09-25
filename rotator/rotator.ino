@@ -247,7 +247,7 @@ uint8_t btn(int KEY)
   {
     // Что-то изменилось, здесь возможна зона неопределенности
     // Делаем задержку
-    delay(40);
+    delay(65);
 
     currentValue = digitalRead(KEY);
     return 0;
@@ -522,7 +522,7 @@ void SwitchOffsetEl()
     }
   }
 }
- 
+
 void CursorAzEl(boolean switch_cursor_one, byte cursor_one, byte cursor_one_string, boolean switch_cursor_two, byte cursor_two, byte cursor_two_string)
 {
   if (switchAzEl == 1)
@@ -740,6 +740,12 @@ void loop()
     }
 
     CursorAzEl(true, 4, 0, true, 9, 0);
+
+    if (btn(BTN_AZ_EL) == 1)
+    {
+      Az_El();
+    }
+
     offsetSwitchIndicator();
     if (operFlag)
     {
@@ -752,11 +758,6 @@ void loop()
         {
           azMove = true;
           strAzTarget = AzElString(azTarget, false);
-        }
-
-        if (btn(BTN_AZ_EL) == 1)
-        {
-          Az_El();
         }
 
         // Управление кнопками
@@ -790,10 +791,6 @@ void loop()
           strElTarget = AzElString(elTarget, true);
         }
 
-        if (btn(BTN_AZ_EL) == 1)
-        {
-          Az_El();
-        }
         // Управление кнопками
         if (digitalRead(BTN_CW) == LOW)
         {
@@ -914,10 +911,10 @@ void loop()
     }
 
     offsetSwitchIndicator();
-    if (operFlag)
-    {
+ //   if (operFlag)
+ //   {
 
-      if (Serial.available())
+      if (Serial.available() && operFlag)
       {
 
         PortRead = Serial.readString();
@@ -996,7 +993,7 @@ void loop()
           digitalWrite(PIN_DOWN, HIGH);
         }
       }
-    }
+  //  }
 
     // Отображение данных с датчика
     strAzAngle = AzElString(azAngle, false);
